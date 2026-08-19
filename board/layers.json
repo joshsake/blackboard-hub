@@ -8,22 +8,22 @@
     },
     "api": {
       "role": "API-level tests and the contracts they assert against.",
-      "dir": "layers/api",
+      "dir": "tests/api",
       "sessionTitle": "API Layer"
     },
     "ui": {
       "role": "UI/browser tests, selectors, page objects.",
-      "dir": "layers/ui",
+      "dir": "tests/ui",
       "sessionTitle": "UI Layer"
     },
     "load": {
       "role": "Load and performance tests, thresholds, scenarios.",
-      "dir": "layers/load",
+      "dir": "tests/load",
       "sessionTitle": "Load Layer"
     },
     "docs": {
       "role": "Documentation, PR bodies, result write-ups.",
-      "dir": "layers/docs",
+      "dir": "tests/docs",
       "sessionTitle": "Docs Layer"
     }
   }
