@@ -7,17 +7,17 @@
       "sessionTitle": "Main Hub"
     },
     "api": {
-      "role": "API-level tests and the contracts they assert against.",
+      "role": "Playwright API tests and the contracts they assert against.",
       "dir": "tests/api",
       "sessionTitle": "API Layer"
     },
     "ui": {
-      "role": "UI/browser tests, selectors, page objects.",
+      "role": "Playwright browser tests, selectors, page objects.",
       "dir": "tests/ui",
       "sessionTitle": "UI Layer"
     },
     "load": {
-      "role": "Load and performance tests, thresholds, scenarios.",
+      "role": "k6 load and performance tests, thresholds, scenarios.",
       "dir": "tests/load",
       "sessionTitle": "Load Layer"
     },

@@ -66,10 +66,18 @@ function git (dir, cmd) {
   } catch { return null }
 }
 
-function deriveGit (dir) {
+function deriveGit (dir, { hubTop } = {}) {
   const path = isAbsolute(dir) ? dir : join(ROOT, dir)
   if (!existsSync(path)) return { state: 'missing' }
   if (!git(path, 'rev-parse --git-dir')) return { state: 'not-a-repo' }
+
+  // A plain subfolder of the hub checkout has no branch state of its own -- it
+  // just reports the hub's. Reporting that as this layer's state would render
+  // one identical row per layer and quietly look like real information, so it
+  // is flagged instead. Distinct per-layer state requires a separate worktree.
+  const top = git(path, 'rev-parse --show-toplevel')
+  const shared = hubTop !== undefined && top !== null && top === hubTop
+
   const branch = git(path, 'rev-parse --abbrev-ref HEAD')
   const dirty = (git(path, 'status --porcelain') || '').split('\n').filter(Boolean).length
   const counts = git(path, 'rev-list --left-right --count @{u}...HEAD')
@@ -80,7 +88,7 @@ function deriveGit (dir) {
     behind = Number(b)
     ahead = Number(a)
   }
-  return { state: 'ok', branch, dirty, ahead, behind }
+  return { state: shared ? 'shares-hub-checkout' : 'ok', branch, dirty, ahead, behind }
 }
 
 function lastActivity (layer) {
@@ -240,6 +248,7 @@ function cmdQueue (flags) {
 function cmdStatus (flags) {
   const registry = layers()
   const entries = fold()
+  const hubTop = git(ROOT, 'rev-parse --show-toplevel')
   const rows = Object.entries(registry).map(([name, meta]) => {
     const mine = entries.filter(e => e.owner === name)
     const last = lastActivity(name)
@@ -248,7 +257,7 @@ function cmdStatus (flags) {
       charter: meta.role,
       last,
       idle: ago(last),
-      git: deriveGit(meta.dir),
+      git: deriveGit(meta.dir, { hubTop: name === 'hub' ? undefined : hubTop }),
       open: mine.filter(e => e.status === 'open').length,
       inbox: entries.filter(e => e.to === name && e.status === 'open').length,
       blockers: mine.filter(e => e.type === 'blocker' && e.status !== 'done').length
@@ -266,6 +275,8 @@ function cmdStatus (flags) {
       if (r.git.ahead !== null) parts.push(`+${r.git.ahead} ahead`, `-${r.git.behind} behind`)
       parts.push(`${r.git.dirty} dirty`)
       console.log(`        git: ${parts.join(' | ')}`)
+    } else if (r.git.state === 'shares-hub-checkout') {
+      console.log('        git: (shares hub checkout — no lane state; needs its own worktree)')
     } else {
       console.log(`        git: (${r.git.state})`)
     }

@@ -57,13 +57,32 @@ let d="";process.stdin.on("data",c=>d+=c).on("end",()=>
   console.log(JSON.parse(d).filter(x=>x.waitingOn!=="human").length))')
 check "layer-to-layer blocker still queued" "$layerq" "1"
 
+# Point one layer at a folder that does not exist, so the missing-dir path is
+# exercised regardless of which layer folders happen to be scaffolded.
+node -e '
+const fs=require("fs"), p=process.env.BLACKBOARD_DIR+"/layers.json";
+const j=JSON.parse(fs.readFileSync(p,"utf8"));
+j.layers.docs.dir="tests/deliberately-absent";
+fs.writeFileSync(p, JSON.stringify(j,null,2));
+'
+
 # Status must degrade rather than crash when a layer folder does not exist.
 missing=$(b status --json | node -e '
+let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{
+  const r=JSON.parse(d).find(x=>x.layer==="docs");
+  console.log(r.git.state);
+})')
+check "missing layer dir reported, not fatal" "$missing" "missing"
+
+# A layer that is a plain subfolder of the hub checkout has no branch state of
+# its own. Reporting the hub's state as the layer's would be a silent lie, so
+# it must be flagged distinctly rather than shown as ok.
+shared=$(b status --json | node -e '
 let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{
   const r=JSON.parse(d).find(x=>x.layer==="api");
   console.log(r.git.state);
 })')
-check "missing layer dir reported, not fatal" "$missing" "missing"
+check "plain subfolder flagged, not passed off as lane state" "$shared" "shares-hub-checkout"
 
 inbox=$(b status --json | node -e '
 let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{
