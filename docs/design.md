@@ -57,7 +57,30 @@ Every entry declares an owning layer. Other layers read it; only the owner
 supersedes it. Cross-layer disagreement becomes an explicit `question`
 entry addressed to the hub, not a silent overwrite.
 
-### 4. Git as the audit log
+### 4. Messages are signals; the board is the record
+
+Layers may message each other directly (`send_message` is any-to-any, not
+hub-mediated). But a side conversation between two layers is exactly the
+invisible state this project exists to remove.
+
+So direct comms are allowed as a *wake signal* only. Anything that matters --
+an answer, a decision, a contract change -- is written to the board regardless
+of how it was communicated. If it is not on the board, it did not happen.
+
+### 5. Routing resolves late, because session IDs are ephemeral
+
+A session's ID changes whenever it restarts, so the registry must never store
+one. `board/layers.json` keys layers on stable identity (name, folder,
+expected session title); the hub resolves a layer to a live session at
+dispatch time via `list_sessions`.
+
+### 6. Superseding is a partial update
+
+An entry is revised by re-appending under the same `id`. Fields not supplied
+inherit from the prior revision. Replacing wholesale would mean a layer that
+merely closed a question silently destroyed its routing, body and refs.
+
+### 7. Git as the audit log
 
 The board is its own git repo. History, blame, and rollback come free, and
 `pull`/`push` becomes the sync mechanism if it ever needs to span machines.

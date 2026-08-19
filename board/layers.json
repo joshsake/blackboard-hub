@@ -1,0 +1,30 @@
+{
+  "_comment": "Stable layer identity. Session IDs are deliberately absent -- they change whenever a session restarts. The hub resolves a layer to a live session at dispatch time by matching sessionTitle via list_sessions.",
+  "layers": {
+    "hub": {
+      "role": "Control. Receives intent, routes to layers, arbitrates questions.",
+      "dir": ".",
+      "sessionTitle": "Main Hub"
+    },
+    "api": {
+      "role": "API-level tests and the contracts they assert against.",
+      "dir": "layers/api",
+      "sessionTitle": "API Layer"
+    },
+    "ui": {
+      "role": "UI/browser tests, selectors, page objects.",
+      "dir": "layers/ui",
+      "sessionTitle": "UI Layer"
+    },
+    "load": {
+      "role": "Load and performance tests, thresholds, scenarios.",
+      "dir": "layers/load",
+      "sessionTitle": "Load Layer"
+    },
+    "docs": {
+      "role": "Documentation, PR bodies, result write-ups.",
+      "dir": "layers/docs",
+      "sessionTitle": "Docs Layer"
+    }
+  }
+}
