@@ -110,3 +110,45 @@ Common fields: `id`, `type`, `owner`, `seq`, `status`, `title`, `body`, `refs`.
   hypothesis and should be validated against one real workstream.
 - Should the hub read layer state from the board only, or also fold in
   `list_events` transcripts?
+
+## Borrowed from the prior art
+
+The prior art (a working system on another machine) surfaced three ideas
+this design originally missed. Adopted here; no compatibility is maintained
+with it, since the two are independent.
+
+### Derived state beats declared state
+
+The dashboard scrapes branch, ahead/dirty counts, PRs and ticket counts rather
+than having each lane type them. Only `focus` and `blocked` are narrative.
+
+That split is now explicit here. `board status` derives git state per layer by
+shelling out; layers cannot write it. Hand-maintained facts rot silently while
+`git status` never lies, so anything a tool already knows is never a board
+entry.
+
+### The human is a queued resource, and blockers fan out
+
+The dashboard's "Waiting on Josh" list is the real bottleneck, and one item
+(`REDACTED_CREDENTIAL`) gated two lanes at once. A design that only records
+"this layer is blocked" cannot show that a single unblock releases several
+layers.
+
+So `blocker` is an entry type, carrying `waitingOn: human | <layer>`. Other
+entries `refs` it, and `board queue` reports fan-out -- how many distinct
+layers each blocker gates -- sorted with the widest first. That ordering is
+the point: it tells the human which single answer buys the most.
+
+### Liveness
+
+`idle 2m` versus `waiting 25h` is the difference between a healthy layer and
+one stalled for a day. `board status` reports time since each layer's last
+board write, so the hub can tell who to poke rather than guessing.
+
+## Not yet built
+
+- The hub and layer skills that encode the protocol (receive intent, resolve
+  layer, dispatch, record; and read board, work, write back, signal).
+- Scraping beyond git. PRs and tickets are derived state in the dashboard and
+  should be here too, but need `gh`/tracker access to be worth adding.
+- Nothing watches the board; activation remains push-only.

@@ -1,17 +1,18 @@
 #!/usr/bin/env node
 // Blackboard CLI. Zero dependencies, no build step -- layer sessions invoke
 // this directly from bash, so it must never require an install or compile.
-import { readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync, mkdirSync } from 'node:fs'
+import { readFileSync, existsSync, readdirSync, mkdirSync, appendFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
+import { dirname, join, isAbsolute } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { execSync } from 'node:child_process'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const BOARD = process.env.BLACKBOARD_DIR || join(ROOT, 'board')
 const ENTRIES = join(BOARD, 'entries')
 const REGISTRY = join(BOARD, 'layers.json')
 
-const TYPES = ['contract', 'task', 'finding', 'question']
+const TYPES = ['contract', 'task', 'finding', 'question', 'blocker']
 const STATUSES = ['open', 'answered', 'blocked', 'done', 'superseded']
 
 const die = (msg) => { console.error(`board: ${msg}`); process.exit(1) }
@@ -21,17 +22,21 @@ function layers () {
   return JSON.parse(readFileSync(REGISTRY, 'utf8')).layers
 }
 
+function logFiles () {
+  if (!existsSync(ENTRIES)) return []
+  return readdirSync(ENTRIES).filter(f => f.endsWith('.jsonl'))
+}
+
 // Fold the per-layer append-only logs into current state.
 // Each layer writes only its own file, so appends never conflict. Ordering is
 // by `seq` across all logs; the last record for an id wins.
 function fold () {
-  if (!existsSync(ENTRIES)) return []
   const records = []
-  for (const file of readdirSync(ENTRIES).filter(f => f.endsWith('.jsonl'))) {
-    const raw = readFileSync(join(ENTRIES, file), 'utf8')
-    raw.split('\n').filter(Boolean).forEach((line, i) => {
-      try { records.push(JSON.parse(line)) } catch { die(`corrupt line ${i + 1} in ${file}`) }
-    })
+  for (const file of logFiles()) {
+    readFileSync(join(ENTRIES, file), 'utf8').split('\n').filter(Boolean)
+      .forEach((line, i) => {
+        try { records.push(JSON.parse(line)) } catch { die(`corrupt line ${i + 1} in ${file}`) }
+      })
   }
   records.sort((a, b) => (a.seq < b.seq ? -1 : a.seq > b.seq ? 1 : 0))
   const state = new Map()
@@ -41,15 +46,65 @@ function fold () {
 
 function history (id) {
   const out = []
-  for (const file of readdirSync(ENTRIES).filter(f => f.endsWith('.jsonl'))) {
+  for (const file of logFiles()) {
     readFileSync(join(ENTRIES, file), 'utf8').split('\n').filter(Boolean)
       .forEach(l => { const r = JSON.parse(l); if (r.id === id) out.push(r) })
   }
   return out.sort((a, b) => (a.seq < b.seq ? -1 : 1))
 }
 
+// ---------------------------------------------------------------------------
+// Derived state. Anything git already knows is scraped, never hand-maintained:
+// declared facts rot silently, `git status` does not.
+// ---------------------------------------------------------------------------
+
+function git (dir, cmd) {
+  try {
+    return execSync(`git ${cmd}`, {
+      cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']
+    }).trim()
+  } catch { return null }
+}
+
+function deriveGit (dir) {
+  const path = isAbsolute(dir) ? dir : join(ROOT, dir)
+  if (!existsSync(path)) return { state: 'missing' }
+  if (!git(path, 'rev-parse --git-dir')) return { state: 'not-a-repo' }
+  const branch = git(path, 'rev-parse --abbrev-ref HEAD')
+  const dirty = (git(path, 'status --porcelain') || '').split('\n').filter(Boolean).length
+  const counts = git(path, 'rev-list --left-right --count @{u}...HEAD')
+  let ahead = null
+  let behind = null
+  if (counts) {
+    const [b, a] = counts.split(/\s+/)
+    behind = Number(b)
+    ahead = Number(a)
+  }
+  return { state: 'ok', branch, dirty, ahead, behind }
+}
+
+function lastActivity (layer) {
+  const f = join(ENTRIES, `${layer}.jsonl`)
+  if (!existsSync(f)) return null
+  const lines = readFileSync(f, 'utf8').split('\n').filter(Boolean)
+  if (!lines.length) return null
+  return JSON.parse(lines[lines.length - 1]).seq
+}
+
+function ago (iso) {
+  if (!iso) return null
+  const ms = Date.now() - new Date(iso).getTime()
+  const m = Math.floor(ms / 60000)
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m}m`
+  const h = Math.floor(m / 60)
+  if (h < 48) return `${h}h`
+  return `${Math.floor(h / 24)}d`
+}
+
 function args (argv) {
-  const flags = {}, positional = []
+  const flags = {}
+  const positional = []
   for (let i = 0; i < argv.length; i++) {
     if (argv[i].startsWith('--')) {
       const key = argv[i].slice(2)
@@ -69,7 +124,13 @@ function cmdAppend (flags) {
   if (!flags.type) die('--type is required')
   if (!TYPES.includes(flags.type)) die(`unknown type "${flags.type}". known: ${TYPES.join(', ')}`)
   if (!flags.title && !flags.id) die('--title is required (or --id, to supersede an existing entry)')
-  if (flags.status && !STATUSES.includes(flags.status)) die(`unknown status "${flags.status}". known: ${STATUSES.join(', ')}`)
+  if (flags.status && !STATUSES.includes(flags.status)) {
+    die(`unknown status "${flags.status}". known: ${STATUSES.join(', ')}`)
+  }
+  const waitingOn = flags['waiting-on']
+  if (waitingOn && waitingOn !== true && waitingOn !== 'human' && !registry[waitingOn]) {
+    die(`--waiting-on must be "human" or a known layer. known: ${Object.keys(registry).join(', ')}`)
+  }
 
   // Single-owner rule: only the owning layer may supersede an entry.
   const id = flags.id || `${flags.type}_${randomUUID().slice(0, 8)}`
@@ -83,8 +144,8 @@ function cmdAppend (flags) {
   }
 
   // Superseding is a PARTIAL update: fields not passed inherit from the prior
-  // revision. Replacing wholesale would silently drop `to`, `body` and `refs`
-  // every time a layer merely changed a status.
+  // revision. Replacing wholesale would mean a layer that merely closed a
+  // question silently destroyed its routing, body and refs.
   const opt = (name, fallback) =>
     flags[name] !== undefined && flags[name] !== true ? flags[name] : fallback
   const record = {
@@ -98,6 +159,7 @@ function cmdAppend (flags) {
       ? String(flags.refs).split(',').map(s => s.trim())
       : (prior ? prior.refs : []),
     to: opt('to', prior ? prior.to : null),
+    waitingOn: opt('waiting-on', prior ? prior.waitingOn : null),
     seq: new Date().toISOString()
   }
   mkdirSync(ENTRIES, { recursive: true })
@@ -107,18 +169,21 @@ function cmdAppend (flags) {
 
 function cmdRead (flags) {
   let entries = fold()
-  if (flags.type) entries = entries.filter(e => e.type === flags.type)
-  if (flags.owner) entries = entries.filter(e => e.owner === flags.owner)
-  if (flags.status) entries = entries.filter(e => e.status === flags.status)
-  if (flags.to) entries = entries.filter(e => e.to === flags.to)
-  if (flags.id) entries = entries.filter(e => e.id === flags.id)
+  const filters = [
+    ['type', 'type'], ['owner', 'owner'], ['status', 'status'],
+    ['to', 'to'], ['id', 'id'], ['waiting-on', 'waitingOn']
+  ]
+  for (const [flag, field] of filters) {
+    if (flags[flag] && flags[flag] !== true) entries = entries.filter(e => e[field] === flags[flag])
+  }
   entries.sort((a, b) => (a.seq < b.seq ? 1 : -1))
 
   if (flags.json) return console.log(JSON.stringify(entries, null, 2))
-  if (!entries.length) return console.log('(board empty -- no entries match)')
+  if (!entries.length) return console.log('(no entries match)')
   for (const e of entries) {
     const to = e.to ? ` -> ${e.to}` : ''
-    console.log(`${e.id}  [${e.type}/${e.status}]  ${e.owner}${to}`)
+    const wait = e.waitingOn ? `  waiting-on:${e.waitingOn}` : ''
+    console.log(`${e.id}  [${e.type}/${e.status}]  ${e.owner}${to}${wait}`)
     console.log(`  ${e.title}`)
     if (e.body) console.log(`  ${e.body.replace(/\n/g, '\n  ')}`)
     if (e.refs.length) console.log(`  refs: ${e.refs.join(', ')}`)
@@ -140,6 +205,75 @@ function cmdShow (positional, flags) {
   })
 }
 
+// The human is a resource with a queue, and one unblock can release several
+// layers at once -- so fan-out is shown, not just the blocker list.
+function cmdQueue (flags) {
+  const entries = fold()
+  const blockers = entries.filter(e => e.type === 'blocker' && e.status !== 'done')
+  const gates = (id) => entries.filter(e => e.refs.includes(id) && e.status !== 'done')
+
+  const enriched = blockers.map(b => ({
+    ...b,
+    gating: [...new Set(gates(b.id).map(e => e.owner))].sort()
+  })).sort((a, b) => b.gating.length - a.gating.length)
+
+  if (flags.json) return console.log(JSON.stringify(enriched, null, 2))
+
+  const render = (list) => list.forEach(b => {
+    const fan = b.gating.length
+    const tag = fan > 1
+      ? `  [gates ${fan} layers: ${b.gating.join(', ')}]`
+      : fan === 1 ? `  [gates ${b.gating[0]}]` : '  [gates nothing yet]'
+    const when = ago(b.seq)
+    console.log(`  ${b.id}  ${b.title}${tag}`)
+    console.log(`      raised by ${b.owner}, ${when === 'just now' ? 'just now' : `${when} ago`}`)
+  })
+
+  console.log('WAITING ON HUMAN')
+  const forHuman = enriched.filter(b => b.waitingOn === 'human')
+  forHuman.length ? render(forHuman) : console.log('  (nothing)')
+  console.log('\nWAITING ON A LAYER')
+  const forLayers = enriched.filter(b => b.waitingOn !== 'human')
+  forLayers.length ? render(forLayers) : console.log('  (nothing)')
+}
+
+function cmdStatus (flags) {
+  const registry = layers()
+  const entries = fold()
+  const rows = Object.entries(registry).map(([name, meta]) => {
+    const mine = entries.filter(e => e.owner === name)
+    const last = lastActivity(name)
+    return {
+      layer: name,
+      charter: meta.role,
+      last,
+      idle: ago(last),
+      git: deriveGit(meta.dir),
+      open: mine.filter(e => e.status === 'open').length,
+      inbox: entries.filter(e => e.to === name && e.status === 'open').length,
+      blockers: mine.filter(e => e.type === 'blocker' && e.status !== 'done').length
+    }
+  })
+  if (flags.json) return console.log(JSON.stringify(rows, null, 2))
+  for (const r of rows) {
+    const active = r.last
+      ? (r.idle === 'just now' ? 'active just now' : `active ${r.idle} ago`)
+      : 'no board activity'
+    console.log(`${r.layer.padEnd(7)} ${active}`)
+    console.log(`        ${r.charter}`)
+    if (r.git.state === 'ok') {
+      const parts = [r.git.branch]
+      if (r.git.ahead !== null) parts.push(`+${r.git.ahead} ahead`, `-${r.git.behind} behind`)
+      parts.push(`${r.git.dirty} dirty`)
+      console.log(`        git: ${parts.join(' | ')}`)
+    } else {
+      console.log(`        git: (${r.git.state})`)
+    }
+    console.log(`        open:${r.open}  inbox:${r.inbox}  blockers:${r.blockers}`)
+    console.log()
+  }
+}
+
 function cmdLayers (flags) {
   const registry = layers()
   if (flags.json) return console.log(JSON.stringify(registry, null, 2))
@@ -154,14 +288,18 @@ switch (process.argv[2]) {
   case 'append': cmdAppend(flags); break
   case 'read': cmdRead(flags); break
   case 'show': cmdShow(positional, flags); break
+  case 'queue': cmdQueue(flags); break
+  case 'status': cmdStatus(flags); break
   case 'layers': cmdLayers(flags); break
   default:
     console.log(`blackboard
 
-  board append --layer <l> --type <t> --title <s> [--body <s>] [--id <id>]
-               [--status <s>] [--refs a,b] [--to <layer>]
-  board read   [--type t] [--owner l] [--status s] [--to l] [--id x] [--json]
+  board append --layer <l> --type <t> [--title <s>] [--body <s>] [--id <id>]
+               [--status <s>] [--refs a,b] [--to <layer>] [--waiting-on human|<layer>]
+  board read   [--type t] [--owner l] [--status s] [--to l] [--waiting-on x] [--id x] [--json]
   board show   <id> [--json]
+  board queue  [--json]     what is blocked, and how many layers each blocker gates
+  board status [--json]     per-layer liveness + derived git state
   board layers [--json]
 
 types:    ${TYPES.join(', ')}
