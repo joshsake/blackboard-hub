@@ -152,3 +152,41 @@ board write, so the hub can tell who to poke rather than guessing.
 - Scraping beyond git. PRs and tickets are derived state in the dashboard and
   should be here too, but need `gh`/tracker access to be worth adding.
 - Nothing watches the board; activation remains push-only.
+
+## Worktree layout
+
+Each layer session works in its own linked worktree on its own branch, so
+layers cannot collide in one working tree and `board status` reports real
+per-lane branch state:
+
+```
+C:/automation/blackboard_hub     main       <- hub session, and the one board
+C:/automation/hub-lanes/api      lane/api
+C:/automation/hub-lanes/ui       lane/ui
+C:/automation/hub-lanes/load     lane/load
+C:/automation/hub-lanes/docs     lane/docs
+```
+
+`board/layers.json` therefore carries two paths per layer: `worktree` (the
+checkout, where git state is read from) and `dir` (where that layer's code
+lives inside it).
+
+A worktree is a full checkout, not a subdirectory view, so each lane needs its
+own `npm ci`. Playwright browsers are cached per user rather than per project,
+so only the package tree is duplicated.
+
+### The board must not follow the worktrees
+
+`board/` lives inside the repo, so `git worktree` gives every lane its own copy
+of it. Resolving the board relative to the CLI's own location therefore
+produced five private boards that silently never saw each other -- layers
+appended happily and read back nothing.
+
+`git rev-parse --git-common-dir` points at the main checkout's `.git` from
+inside any linked worktree, so the CLI resolves the board from there and every
+lane shares one. `board where` prints the resolved path; if two lanes disagree,
+they are isolated. `test/shared-board.sh` asserts this, because the bug was
+found by hand and nothing in the suite would have caught it.
+
+Lanes must be kept current with main (`git merge main`) or they run an older
+CLI. The shared-board test reports a stale lane by name.

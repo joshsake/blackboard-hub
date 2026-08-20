@@ -31,13 +31,15 @@ for wt in $(git worktree list --porcelain | awk '/^worktree /{print $2}'); do
   # A lane running an older CLI has no `where` and prints usage instead. That
   # lane is genuinely broken -- it would write to a private board -- so say so
   # plainly rather than diffing a wall of help text.
-  case "$got" in
-    */board)
-      check "$name resolves to the hub board" "$got" "$hub" ;;
-    *)
-      echo "  FAIL  $name is behind main (no 'where' command) -- run: cd $wt && git merge main"
-      fail=1 ;;
-  esac
+  # Test for a real directory rather than glob the string: paths use backslashes
+  # on Windows, and the usage banner's first line is literally "blackboard",
+  # which any *board pattern would happily match.
+  if [ -d "$got" ]; then
+    check "$name resolves to the hub board" "$got" "$hub"
+  else
+    echo "  FAIL  $name is behind main (no 'where' command) -- run: cd $wt && git merge main"
+    fail=1
+  fi
 done
 
 if [ "$lanes" -eq 0 ]; then

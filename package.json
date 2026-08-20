@@ -6,7 +6,7 @@
   "description": "Blackboard coordination hub and the test framework its layers drive.",
   "scripts": {
     "board": "node bin/board.mjs",
-    "test:board": "bash test/smoke.sh && bash test/queue.sh",
+    "test:board": "bash test/smoke.sh && bash test/queue.sh && bash test/shared-board.sh",
     "test:api": "playwright test --project=api",
     "test:ui": "playwright test --project=ui",
     "test:load": "k6 run tests/load/baseline.js"
