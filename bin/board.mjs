@@ -257,7 +257,7 @@ function cmdQueue (flags) {
   console.log('WAITING ON HUMAN')
   const forHuman = enriched.filter(b => b.waitingOn === 'human')
   forHuman.length ? render(forHuman) : console.log('  (nothing)')
-  console.log('\nWAITING ON A LAYER')
+  console.log('\nWAITING ON A LANE')
   const forLayers = enriched.filter(b => b.waitingOn !== 'human')
   forLayers.length ? render(forLayers) : console.log('  (nothing)')
 }
