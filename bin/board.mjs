@@ -323,6 +323,9 @@ switch (process.argv[2]) {
   case 'queue': cmdQueue(flags); break
   case 'status': cmdStatus(flags); break
   case 'layers': cmdLayers(flags); break
+  // Every worktree must resolve to the same path here. If two layers disagree,
+  // they are writing to private boards and cannot see each other.
+  case 'where': console.log(BOARD); break
   default:
     console.log(`blackboard
 
@@ -333,6 +336,7 @@ switch (process.argv[2]) {
   board queue  [--json]     what is blocked, and how many layers each blocker gates
   board status [--json]     per-layer liveness + derived git state
   board layers [--json]
+  board where               resolved board path (identical from every worktree)
 
 types:    ${TYPES.join(', ')}
 statuses: ${STATUSES.join(', ')}`)
