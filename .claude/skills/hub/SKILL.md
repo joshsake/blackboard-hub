@@ -49,8 +49,18 @@ When the user states a need:
    ```
 
 3. **Resolve the lane to a live session.** Session IDs change on every
-   restart, so never store or reuse one — match `sessionTitle` from
-   `board/lanes.json` against `list_sessions` at dispatch time.
+   restart, so never store or reuse one — resolve at dispatch time from
+   `list_sessions`, matching in this order:
+
+   1. **`cwd`** equals the lane's `worktree` (from `board/lanes.json`). Exact,
+      and true by construction: one worktree per lane.
+   2. **`branch`** equals `lane/<name>`. Equally exact; use it if `cwd` is
+      reported differently (path separators, trailing slash).
+   3. **`sessionTitle`** only as a last resort. Titles are auto-generated prose
+      and drift; never require the user to rename a session to make routing work.
+
+   Prefer a session with `isRunning: true`. If several match, pick the most
+   recent `lastActivityAt` and say which you chose.
 4. **Send the signal**, always naming the entry id so the lane can find its
    own task:
 
