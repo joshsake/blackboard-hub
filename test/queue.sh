@@ -34,27 +34,27 @@ b append --lane api --type task --title "contract assertions" --status blocked -
 
 gating=$(b queue --json | node -e '
 let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{
-  const q=JSON.parse(d).find(x=>x.title==="staging credential not published");
+  const q=JSON.parse(d).blockers.find(x=>x.title==="staging credential not published");
   console.log(q.gating.join(","));
 })')
 check "human blocker reports fan-out across lanes" "$gating" "load,ui"
 
 human=$(b queue --json | node -e '
 let d="";process.stdin.on("data",c=>d+=c).on("end",()=>
-  console.log(JSON.parse(d).filter(x=>x.waitingOn==="human").length))')
+  console.log(JSON.parse(d).blockers.filter(x=>x.waitingOn==="human").length))')
 check "exactly one blocker waiting on human" "$human" "1"
 
 # A resolved blocker must drop out of the queue entirely.
 b append --lane load --id "$B" --type blocker --status done >/dev/null
 left=$(b queue --json | node -e '
 let d="";process.stdin.on("data",c=>d+=c).on("end",()=>
-  console.log(JSON.parse(d).filter(x=>x.waitingOn==="human").length))')
+  console.log(JSON.parse(d).blockers.filter(x=>x.waitingOn==="human").length))')
 check "resolved blocker leaves the queue" "$left" "0"
 
 # The lane-to-lane blocker is unaffected by resolving the human one.
 laneq=$(b queue --json | node -e '
 let d="";process.stdin.on("data",c=>d+=c).on("end",()=>
-  console.log(JSON.parse(d).filter(x=>x.waitingOn!=="human").length))')
+  console.log(JSON.parse(d).blockers.filter(x=>x.waitingOn!=="human").length))')
 check "lane-to-lane blocker still queued" "$laneq" "1"
 
 # Repoint two lanes so both degraded paths are exercised regardless of which
@@ -98,6 +98,21 @@ let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{
   console.log(r.blockers);
 })')
 check "ui owns no blockers" "$inbox" "0"
+
+# An open question is a blocked decision and must appear in the queue. The hub
+# protocol only requires `status` and `queue`, so a question visible nowhere but
+# an inbox is a question the hub will miss -- which is exactly what happened.
+Q=$(b append --lane api --type question --to hub --title "which anchor should deriveGit use?")
+inq=$(b queue --json | QID="$Q" node -e '
+let d="";process.stdin.on("data",c=>d+=c).on("end",()=>
+  console.log(JSON.parse(d).questions.filter(q=>q.id===process.env.QID).length))')
+check "an open question shows in the queue" "$inq" "1"
+
+b append --lane api --id "$Q" --type question --status answered >/dev/null
+gone=$(b queue --json | QID="$Q" node -e '
+let d="";process.stdin.on("data",c=>d+=c).on("end",()=>
+  console.log(JSON.parse(d).questions.filter(q=>q.id===process.env.QID).length))')
+check "an answered question leaves the queue" "$gone" "0"
 
 echo
 [ "$fail" -eq 0 ] && echo "all checks passed" || { echo "FAILURES"; exit 1; }

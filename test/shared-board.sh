@@ -46,5 +46,26 @@ if [ "$lanes" -eq 0 ]; then
   echo "  SKIP  no lane worktrees present (run: git worktree add -b lane/api ../hub-lanes/api)"
 fi
 
+# Derived git state must also be worktree-independent, not just the board path.
+# lanes.json stores worktree paths relative, so resolving them against the
+# invoking checkout made every lane row wrong when a lane ran `status` -- the
+# hub row showed the caller's branch and the rest showed "missing". Reported by
+# the api lane as question_9ee169d9; the board-identity checks above did not
+# catch it, because the board was shared correctly the whole time.
+hubrows=$(node bin/board.mjs status --json | node -e '
+let d="";process.stdin.on("data",c=>d+=c).on("end",()=>
+  console.log(JSON.parse(d).map(r=>`${r.lane}:${r.git.state}:${r.git.branch}`).join("|")))')
+
+for wt in $(git worktree list --porcelain | awk '/^worktree /{print $2}'); do
+  [ "$(cd "$wt" && git rev-parse --git-dir)" = "$(git rev-parse --git-dir)" ] && continue
+  [ -f "$wt/bin/board.mjs" ] || continue
+  lanerows=$(cd "$wt" && node bin/board.mjs status --json 2>/dev/null | node -e '
+let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{
+  try { console.log(JSON.parse(d).map(r=>`${r.lane}:${r.git.state}:${r.git.branch}`).join("|")) }
+  catch { console.log("UNPARSEABLE") }
+})')
+  check "$(basename "$wt") derives the same git state as the hub" "$lanerows" "$hubrows"
+done
+
 echo
 [ "$fail" -eq 0 ] && echo "all checks passed" || { echo "FAILURES"; exit 1; }
