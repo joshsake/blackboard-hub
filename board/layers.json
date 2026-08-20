@@ -1,28 +1,33 @@
 {
-  "_comment": "Stable layer identity. Session IDs are deliberately absent -- they change whenever a session restarts. The hub resolves a layer to a live session at dispatch time by matching sessionTitle via list_sessions.",
+  "_comment": "Stable layer identity. Session IDs are deliberately absent -- they change whenever a session restarts, so the hub resolves a layer to a live session at dispatch time by matching sessionTitle via list_sessions. 'worktree' is the checkout a layer session works in and is where its git state is read from; 'dir' is where that layer's code lives inside the checkout.",
   "layers": {
     "hub": {
       "role": "Control. Receives intent, routes to layers, arbitrates questions.",
+      "worktree": ".",
       "dir": ".",
       "sessionTitle": "Main Hub"
     },
     "api": {
       "role": "Playwright API tests and the contracts they assert against.",
+      "worktree": "../hub-lanes/api",
       "dir": "tests/api",
       "sessionTitle": "API Layer"
     },
     "ui": {
       "role": "Playwright browser tests, selectors, page objects.",
+      "worktree": "../hub-lanes/ui",
       "dir": "tests/ui",
       "sessionTitle": "UI Layer"
     },
     "load": {
       "role": "k6 load and performance tests, thresholds, scenarios.",
+      "worktree": "../hub-lanes/load",
       "dir": "tests/load",
       "sessionTitle": "Load Layer"
     },
     "docs": {
       "role": "Documentation, PR bodies, result write-ups.",
+      "worktree": "../hub-lanes/docs",
       "dir": "tests/docs",
       "sessionTitle": "Docs Layer"
     }

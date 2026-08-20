@@ -8,7 +8,24 @@ import { randomUUID } from 'node:crypto'
 import { execSync } from 'node:child_process'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
-const BOARD = process.env.BLACKBOARD_DIR || join(ROOT, 'board')
+
+// The board must be ONE surface shared by every layer. Because it lives inside
+// the repo, `git worktree` hands each lane its own copy -- so resolving the
+// board relative to ROOT would give five private boards that never see each
+// other, which is the exact failure this project exists to prevent.
+//
+// `git rev-parse --git-common-dir` returns the MAIN checkout's .git from
+// inside any linked worktree, so its parent is the one canonical board.
+function mainCheckout () {
+  try {
+    const common = execSync('git rev-parse --path-format=absolute --git-common-dir', {
+      cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']
+    }).trim()
+    return common ? dirname(common) : ROOT
+  } catch { return ROOT }
+}
+
+const BOARD = process.env.BLACKBOARD_DIR || join(mainCheckout(), 'board')
 const ENTRIES = join(BOARD, 'entries')
 const REGISTRY = join(BOARD, 'layers.json')
 
@@ -257,7 +274,11 @@ function cmdStatus (flags) {
       charter: meta.role,
       last,
       idle: ago(last),
-      git: deriveGit(meta.dir, { hubTop: name === 'hub' ? undefined : hubTop }),
+      // Git state belongs to the layer's checkout, not to the folder its code
+      // sits in -- a subfolder would only ever report the enclosing checkout.
+      git: deriveGit(meta.worktree || meta.dir, {
+        hubTop: name === 'hub' ? undefined : hubTop
+      }),
       open: mine.filter(e => e.status === 'open').length,
       inbox: entries.filter(e => e.to === name && e.status === 'open').length,
       blockers: mine.filter(e => e.type === 'blocker' && e.status !== 'done').length
