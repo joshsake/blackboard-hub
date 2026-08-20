@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Blackboard CLI. Zero dependencies, no build step -- lane sessions invoke
 // this directly from bash, so it must never require an install or compile.
-import { readFileSync, existsSync, readdirSync, mkdirSync, appendFileSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync, appendFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, isAbsolute } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -28,6 +28,11 @@ function mainCheckout () {
 const BOARD = process.env.BLACKBOARD_DIR || join(mainCheckout(), 'board')
 const ENTRIES = join(BOARD, 'entries')
 const REGISTRY = join(BOARD, 'lanes.json')
+
+// Where each lane actually lives, as declared by the lane itself rather than
+// guessed by the hub. One file per lane, so registrations never conflict for
+// the same reason the entry logs never do.
+const REGISTRATIONS = join(BOARD, 'registrations')
 
 const TYPES = ['contract', 'task', 'finding', 'question', 'blocker']
 const STATUSES = ['open', 'answered', 'blocked', 'done', 'superseded']
@@ -106,6 +111,61 @@ function deriveGit (dir, { hubTop } = {}) {
     ahead = Number(a)
   }
   return { state: shared ? 'shares-hub-checkout' : 'ok', branch, dirty, ahead, behind }
+}
+
+// Canonical form for comparing a registered cwd against a session's reported
+// cwd. Windows paths arrive with either separator and arbitrary case.
+function cwdKey (p) {
+  return String(p).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+}
+
+function readRegistration (lane) {
+  const f = join(REGISTRATIONS, `${lane}.json`)
+  if (!existsSync(f)) return null
+  try { return JSON.parse(readFileSync(f, 'utf8')) } catch { return null }
+}
+
+// A lane announces where it is; the hub does not predict it. Path conventions
+// break the moment a session is opened somewhere unexpected, and they fail
+// silently -- an unregistered lane is at least visibly unregistered.
+function cmdRegister (flags) {
+  const registry = lanes()
+  const lane = flags.lane
+  if (!lane) die('--lane is required')
+  if (!registry[lane]) die(`unknown lane "${lane}". known: ${Object.keys(registry).join(', ')}`)
+
+  const cwd = flags.cwd && flags.cwd !== true ? flags.cwd : process.cwd()
+  if (!existsSync(cwd)) die(`cwd does not exist: ${cwd}`)
+
+  const record = {
+    lane,
+    // The hub matches these against list_sessions to find the live session.
+    cwd,
+    // list_sessions reports Windows paths with backslashes while node reports
+    // them with forward slashes, so a raw string compare never matches. Match
+    // on this instead -- separators unified, case folded, trailing slash gone.
+    cwdKey: cwdKey(cwd),
+    branch: git(cwd, 'rev-parse --abbrev-ref HEAD'),
+    toplevel: git(cwd, 'rev-parse --show-toplevel'),
+    registeredAt: new Date().toISOString()
+  }
+  mkdirSync(REGISTRATIONS, { recursive: true })
+  writeFileSync(join(REGISTRATIONS, `${lane}.json`), JSON.stringify(record, null, 2) + '\n')
+  console.log(`registered ${lane}`)
+  console.log(`  cwd:    ${record.cwd}`)
+  console.log(`  branch: ${record.branch ?? '(not a git checkout)'}`)
+}
+
+function cmdRegistrations (flags) {
+  const registry = lanes()
+  const rows = Object.keys(registry).map(lane => ({ lane, ...(readRegistration(lane) || {}) }))
+  if (flags.json) return console.log(JSON.stringify(rows, null, 2))
+  for (const r of rows) {
+    if (!r.registeredAt) { console.log(`${r.lane.padEnd(7)} UNREGISTERED`); continue }
+    console.log(`${r.lane.padEnd(7)} ${r.branch ?? '(no branch)'}`)
+    console.log(`        ${r.cwd}`)
+    console.log(`        registered ${ago(r.registeredAt)} ago`)
+  }
 }
 
 function lastActivity (lane) {
@@ -269,14 +329,18 @@ function cmdStatus (flags) {
   const rows = Object.entries(registry).map(([name, meta]) => {
     const mine = entries.filter(e => e.owner === name)
     const last = lastActivity(name)
+    const reg = readRegistration(name)
     return {
       lane: name,
       charter: meta.role,
       last,
       idle: ago(last),
+      registered: reg ? { cwd: reg.cwd, branch: reg.branch, at: reg.registeredAt } : null,
       // Git state belongs to the lane's checkout, not to the folder its code
       // sits in -- a subfolder would only ever report the enclosing checkout.
-      git: deriveGit(meta.worktree || meta.dir, {
+      // A registration is where the lane says it actually is, so it wins over
+      // the configured guess.
+      git: deriveGit(reg?.cwd || meta.worktree || meta.dir, {
         hubTop: name === 'hub' ? undefined : hubTop
       }),
       open: mine.filter(e => e.status === 'open').length,
@@ -291,6 +355,9 @@ function cmdStatus (flags) {
       : 'no board activity'
     console.log(`${r.lane.padEnd(7)} ${active}`)
     console.log(`        ${r.charter}`)
+    if (!r.registered) {
+      console.log('        NOT REGISTERED — run: board register --lane ' + r.lane)
+    }
     if (r.git.state === 'ok') {
       const parts = [r.git.branch]
       if (r.git.ahead !== null) parts.push(`+${r.git.ahead} ahead`, `-${r.git.behind} behind`)
@@ -306,7 +373,7 @@ function cmdStatus (flags) {
   }
 }
 
-function cmdLayers (flags) {
+function cmdLanes (flags) {
   const registry = lanes()
   if (flags.json) return console.log(JSON.stringify(registry, null, 2))
   for (const [name, meta] of Object.entries(registry)) {
@@ -322,7 +389,9 @@ switch (process.argv[2]) {
   case 'show': cmdShow(positional, flags); break
   case 'queue': cmdQueue(flags); break
   case 'status': cmdStatus(flags); break
-  case 'lanes': cmdLayers(flags); break
+  case 'lanes': cmdLanes(flags); break
+  case 'register': cmdRegister(flags); break
+  case 'registrations': cmdRegistrations(flags); break
   // Every worktree must resolve to the same path here. If two lanes disagree,
   // they are writing to private boards and cannot see each other.
   case 'where': console.log(BOARD); break
@@ -336,6 +405,8 @@ switch (process.argv[2]) {
   board queue  [--json]     what is blocked, and how many lanes each blocker gates
   board status [--json]     per-lane liveness + derived git state
   board lanes [--json]
+  board register --lane <l> [--cwd <path>]   declare where this lane is running
+  board registrations [--json]              where each lane says it lives
   board where               resolved board path (identical from every worktree)
 
 types:    ${TYPES.join(', ')}

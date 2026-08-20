@@ -17,6 +17,27 @@ working tree — yours is your own branch, so commit freely without coordinating
 only put in a chat reply is invisible to every other lane. Write it to the
 board.
 
+## Register first, once per session
+
+The hub cannot route to you until you say where you are. Do this before
+anything else:
+
+```bash
+node bin/board.mjs register --lane <you>
+```
+
+It records your working directory and branch, and re-registering just moves
+you — safe to run every session. If you are working outside the hub checkout,
+call it by absolute path:
+
+```bash
+node C:/automation/blackboard_hub/bin/board.mjs register --lane <you>
+```
+
+You may live anywhere; the hub finds you by what you registered, not by where
+it expected you to be. An unregistered lane is unreachable — the hub will say
+so rather than guess.
+
 ## Start every session by reading
 
 ```bash

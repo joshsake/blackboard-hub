@@ -48,9 +48,30 @@ When the user states a need:
      --title "<what, specifically>" --body "<why, and what done looks like>"
    ```
 
-3. **Resolve the lane to a live session.** Session IDs change on every
-   restart, so never store or reuse one — match `sessionTitle` from
-   `board/lanes.json` against `list_sessions` at dispatch time.
+3. **Resolve the lane to a live session — from its registration.** Lanes
+   declare where they run; never predict it from a path convention. Read the
+   registrations, then match against `list_sessions`:
+
+   ```bash
+   node bin/board.mjs registrations --json
+   ```
+
+   Compare each session's `cwd`, normalised the same way the CLI normalises
+   `cwdKey` — backslashes to forward slashes, case folded, trailing slash
+   removed. `list_sessions` reports `C:\...` while the CLI records `C:/...`, so
+   a raw string compare will never match. Fall back to `branch`.
+
+   Prefer `isRunning: true`; on multiple matches take the most recent
+   `lastActivityAt` and say which you chose.
+
+   **If the lane is UNREGISTERED**, there is nothing to route to. Do not guess
+   a session. Tell the user to run this in that lane's session:
+
+   ```bash
+   node C:/automation/blackboard_hub/bin/board.mjs register --lane <name>
+   ```
+
+   Session IDs change on every restart, so never store or reuse one.
 4. **Send the signal**, always naming the entry id so the lane can find its
    own task:
 
