@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Blackboard coordination hub and the test framework its layers drive.",
+  "description": "Blackboard coordination hub and the test framework its lanes drive.",
   "scripts": {
     "board": "node bin/board.mjs",
     "test:board": "bash test/smoke.sh && bash test/queue.sh && bash test/shared-board.sh",

@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/entries"
-cp board/layers.json "$TMP/layers.json"
+cp board/lanes.json "$TMP/lanes.json"
 export BLACKBOARD_DIR="$TMP"
 b () { node bin/board.mjs "$@"; }
 
@@ -19,23 +19,23 @@ check () { # check <label> <actual> <expected>
 
 echo "board smoke test"
 
-T=$(b append --layer hub --type task --to api --title "Cover checkout endpoint" --body "assert POST /checkout")
-C=$(b append --layer api --type contract --title "POST /checkout" --body "201 -> {orderId,total}" --refs "$T")
-Q=$(b append --layer ui --type question --to api --title "orderId stable across retries?" --refs "$C")
+T=$(b append --lane hub --type task --to api --title "Cover checkout endpoint" --body "assert POST /checkout")
+C=$(b append --lane api --type contract --title "POST /checkout" --body "201 -> {orderId,total}" --refs "$T")
+Q=$(b append --lane ui --type question --to api --title "orderId stable across retries?" --refs "$C")
 
 # Single-owner rule: a non-owner must not be able to supersede an entry.
-if b append --layer ui --id "$C" --type contract --status done >/dev/null 2>&1
+if b append --lane ui --id "$C" --type contract --status done >/dev/null 2>&1
 then echo "  FAIL  ownership guard let a non-owner supersede"; fail=1
 else echo "  PASS  ownership guard refuses non-owner"; fi
 
-# Unknown layer and unknown type must be rejected, not silently accepted.
-if b append --layer nope --type task --title x >/dev/null 2>&1
-then echo "  FAIL  unknown layer accepted"; fail=1; else echo "  PASS  unknown layer rejected"; fi
-if b append --layer api --type bogus --title x >/dev/null 2>&1
+# Unknown lane and unknown type must be rejected, not silently accepted.
+if b append --lane nope --type task --title x >/dev/null 2>&1
+then echo "  FAIL  unknown lane accepted"; fail=1; else echo "  PASS  unknown lane rejected"; fi
+if b append --lane api --type bogus --title x >/dev/null 2>&1
 then echo "  FAIL  unknown type accepted"; fail=1; else echo "  PASS  unknown type rejected"; fi
 
 # Partial update must merge, not replace.
-b append --layer ui --id "$Q" --type question --status answered >/dev/null
+b append --lane ui --id "$Q" --type question --status answered >/dev/null
 read -r n st to ti < <(BLACKBOARD_DIR="$TMP" Q="$Q" node -e '
 const {execSync}=require("child_process");
 const a=JSON.parse(execSync("node bin/board.mjs read --json").toString()).filter(x=>x.id===process.env.Q);

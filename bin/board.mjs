@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Blackboard CLI. Zero dependencies, no build step -- layer sessions invoke
+// Blackboard CLI. Zero dependencies, no build step -- lane sessions invoke
 // this directly from bash, so it must never require an install or compile.
 import { readFileSync, existsSync, readdirSync, mkdirSync, appendFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -9,7 +9,7 @@ import { execSync } from 'node:child_process'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
-// The board must be ONE surface shared by every layer. Because it lives inside
+// The board must be ONE surface shared by every lane. Because it lives inside
 // the repo, `git worktree` hands each lane its own copy -- so resolving the
 // board relative to ROOT would give five private boards that never see each
 // other, which is the exact failure this project exists to prevent.
@@ -27,16 +27,16 @@ function mainCheckout () {
 
 const BOARD = process.env.BLACKBOARD_DIR || join(mainCheckout(), 'board')
 const ENTRIES = join(BOARD, 'entries')
-const REGISTRY = join(BOARD, 'layers.json')
+const REGISTRY = join(BOARD, 'lanes.json')
 
 const TYPES = ['contract', 'task', 'finding', 'question', 'blocker']
 const STATUSES = ['open', 'answered', 'blocked', 'done', 'superseded']
 
 const die = (msg) => { console.error(`board: ${msg}`); process.exit(1) }
 
-function layers () {
+function lanes () {
   if (!existsSync(REGISTRY)) die(`no registry at ${REGISTRY}`)
-  return JSON.parse(readFileSync(REGISTRY, 'utf8')).layers
+  return JSON.parse(readFileSync(REGISTRY, 'utf8')).lanes
 }
 
 function logFiles () {
@@ -44,8 +44,8 @@ function logFiles () {
   return readdirSync(ENTRIES).filter(f => f.endsWith('.jsonl'))
 }
 
-// Fold the per-layer append-only logs into current state.
-// Each layer writes only its own file, so appends never conflict. Ordering is
+// Fold the per-lane append-only logs into current state.
+// Each lane writes only its own file, so appends never conflict. Ordering is
 // by `seq` across all logs; the last record for an id wins.
 function fold () {
   const records = []
@@ -89,9 +89,9 @@ function deriveGit (dir, { hubTop } = {}) {
   if (!git(path, 'rev-parse --git-dir')) return { state: 'not-a-repo' }
 
   // A plain subfolder of the hub checkout has no branch state of its own -- it
-  // just reports the hub's. Reporting that as this layer's state would render
-  // one identical row per layer and quietly look like real information, so it
-  // is flagged instead. Distinct per-layer state requires a separate worktree.
+  // just reports the hub's. Reporting that as this lane's state would render
+  // one identical row per lane and quietly look like real information, so it
+  // is flagged instead. Distinct per-lane state requires a separate worktree.
   const top = git(path, 'rev-parse --show-toplevel')
   const shared = hubTop !== undefined && top !== null && top === hubTop
 
@@ -108,8 +108,8 @@ function deriveGit (dir, { hubTop } = {}) {
   return { state: shared ? 'shares-hub-checkout' : 'ok', branch, dirty, ahead, behind }
 }
 
-function lastActivity (layer) {
-  const f = join(ENTRIES, `${layer}.jsonl`)
+function lastActivity (lane) {
+  const f = join(ENTRIES, `${lane}.jsonl`)
   if (!existsSync(f)) return null
   const lines = readFileSync(f, 'utf8').split('\n').filter(Boolean)
   if (!lines.length) return null
@@ -142,10 +142,10 @@ function args (argv) {
 }
 
 function cmdAppend (flags) {
-  const registry = layers()
-  const layer = flags.layer
-  if (!layer) die('--layer is required')
-  if (!registry[layer]) die(`unknown layer "${layer}". known: ${Object.keys(registry).join(', ')}`)
+  const registry = lanes()
+  const lane = flags.lane
+  if (!lane) die('--lane is required')
+  if (!registry[lane]) die(`unknown lane "${lane}". known: ${Object.keys(registry).join(', ')}`)
   if (!flags.type) die('--type is required')
   if (!TYPES.includes(flags.type)) die(`unknown type "${flags.type}". known: ${TYPES.join(', ')}`)
   if (!flags.title && !flags.id) die('--title is required (or --id, to supersede an existing entry)')
@@ -154,29 +154,29 @@ function cmdAppend (flags) {
   }
   const waitingOn = flags['waiting-on']
   if (waitingOn && waitingOn !== true && waitingOn !== 'human' && !registry[waitingOn]) {
-    die(`--waiting-on must be "human" or a known layer. known: ${Object.keys(registry).join(', ')}`)
+    die(`--waiting-on must be "human" or a known lane. known: ${Object.keys(registry).join(', ')}`)
   }
 
-  // Single-owner rule: only the owning layer may supersede an entry.
+  // Single-owner rule: only the owning lane may supersede an entry.
   const id = flags.id || `${flags.type}_${randomUUID().slice(0, 8)}`
   let prior = null
   if (flags.id) {
     prior = fold().find(e => e.id === flags.id) || null
-    if (prior && prior.owner !== layer) {
-      die(`entry ${flags.id} is owned by "${prior.owner}"; "${layer}" cannot supersede it.\n` +
+    if (prior && prior.owner !== lane) {
+      die(`entry ${flags.id} is owned by "${prior.owner}"; "${lane}" cannot supersede it.\n` +
           `       raise a question entry addressed to the hub instead.`)
     }
   }
 
   // Superseding is a PARTIAL update: fields not passed inherit from the prior
-  // revision. Replacing wholesale would mean a layer that merely closed a
+  // revision. Replacing wholesale would mean a lane that merely closed a
   // question silently destroyed its routing, body and refs.
   const opt = (name, fallback) =>
     flags[name] !== undefined && flags[name] !== true ? flags[name] : fallback
   const record = {
     id,
     type: flags.type,
-    owner: layer,
+    owner: lane,
     status: opt('status', prior ? prior.status : 'open'),
     title: opt('title', prior ? prior.title : ''),
     body: opt('body', prior ? prior.body : ''),
@@ -188,7 +188,7 @@ function cmdAppend (flags) {
     seq: new Date().toISOString()
   }
   mkdirSync(ENTRIES, { recursive: true })
-  appendFileSync(join(ENTRIES, `${layer}.jsonl`), JSON.stringify(record) + '\n')
+  appendFileSync(join(ENTRIES, `${lane}.jsonl`), JSON.stringify(record) + '\n')
   console.log(id)
 }
 
@@ -231,7 +231,7 @@ function cmdShow (positional, flags) {
 }
 
 // The human is a resource with a queue, and one unblock can release several
-// layers at once -- so fan-out is shown, not just the blocker list.
+// lanes at once -- so fan-out is shown, not just the blocker list.
 function cmdQueue (flags) {
   const entries = fold()
   const blockers = entries.filter(e => e.type === 'blocker' && e.status !== 'done')
@@ -247,7 +247,7 @@ function cmdQueue (flags) {
   const render = (list) => list.forEach(b => {
     const fan = b.gating.length
     const tag = fan > 1
-      ? `  [gates ${fan} layers: ${b.gating.join(', ')}]`
+      ? `  [gates ${fan} lanes: ${b.gating.join(', ')}]`
       : fan === 1 ? `  [gates ${b.gating[0]}]` : '  [gates nothing yet]'
     const when = ago(b.seq)
     console.log(`  ${b.id}  ${b.title}${tag}`)
@@ -263,18 +263,18 @@ function cmdQueue (flags) {
 }
 
 function cmdStatus (flags) {
-  const registry = layers()
+  const registry = lanes()
   const entries = fold()
   const hubTop = git(ROOT, 'rev-parse --show-toplevel')
   const rows = Object.entries(registry).map(([name, meta]) => {
     const mine = entries.filter(e => e.owner === name)
     const last = lastActivity(name)
     return {
-      layer: name,
+      lane: name,
       charter: meta.role,
       last,
       idle: ago(last),
-      // Git state belongs to the layer's checkout, not to the folder its code
+      // Git state belongs to the lane's checkout, not to the folder its code
       // sits in -- a subfolder would only ever report the enclosing checkout.
       git: deriveGit(meta.worktree || meta.dir, {
         hubTop: name === 'hub' ? undefined : hubTop
@@ -289,7 +289,7 @@ function cmdStatus (flags) {
     const active = r.last
       ? (r.idle === 'just now' ? 'active just now' : `active ${r.idle} ago`)
       : 'no board activity'
-    console.log(`${r.layer.padEnd(7)} ${active}`)
+    console.log(`${r.lane.padEnd(7)} ${active}`)
     console.log(`        ${r.charter}`)
     if (r.git.state === 'ok') {
       const parts = [r.git.branch]
@@ -307,7 +307,7 @@ function cmdStatus (flags) {
 }
 
 function cmdLayers (flags) {
-  const registry = layers()
+  const registry = lanes()
   if (flags.json) return console.log(JSON.stringify(registry, null, 2))
   for (const [name, meta] of Object.entries(registry)) {
     console.log(`${name.padEnd(8)} ${meta.role}`)
@@ -322,20 +322,20 @@ switch (process.argv[2]) {
   case 'show': cmdShow(positional, flags); break
   case 'queue': cmdQueue(flags); break
   case 'status': cmdStatus(flags); break
-  case 'layers': cmdLayers(flags); break
-  // Every worktree must resolve to the same path here. If two layers disagree,
+  case 'lanes': cmdLayers(flags); break
+  // Every worktree must resolve to the same path here. If two lanes disagree,
   // they are writing to private boards and cannot see each other.
   case 'where': console.log(BOARD); break
   default:
     console.log(`blackboard
 
-  board append --layer <l> --type <t> [--title <s>] [--body <s>] [--id <id>]
-               [--status <s>] [--refs a,b] [--to <layer>] [--waiting-on human|<layer>]
+  board append --lane <l> --type <t> [--title <s>] [--body <s>] [--id <id>]
+               [--status <s>] [--refs a,b] [--to <lane>] [--waiting-on human|<lane>]
   board read   [--type t] [--owner l] [--status s] [--to l] [--waiting-on x] [--id x] [--json]
   board show   <id> [--json]
-  board queue  [--json]     what is blocked, and how many layers each blocker gates
-  board status [--json]     per-layer liveness + derived git state
-  board layers [--json]
+  board queue  [--json]     what is blocked, and how many lanes each blocker gates
+  board status [--json]     per-lane liveness + derived git state
+  board lanes [--json]
   board where               resolved board path (identical from every worktree)
 
 types:    ${TYPES.join(', ')}
