@@ -190,3 +190,24 @@ found by hand and nothing in the suite would have caught it.
 
 Lanes must be kept current with main (`git merge main`) or they run an older
 CLI. The shared-board test reports a stale lane by name.
+
+## System under test
+
+The app under test is `wayfarer` (a Next.js wizard app in a sibling checkout).
+`playwright.config.ts` resolves it as `<main checkout>/../wayfarer`, anchored on
+the main checkout for the same reason the board is -- a path relative to the
+config file would resolve differently inside each lane worktree.
+
+Two modes, chosen by whether `BASE_URL` is set:
+
+- **unset** -- Playwright builds and serves the app itself via `webServer`, so a
+  run is self-contained and needs no "start the app first" step. This is the
+  pattern wayfarer's own suite already used, and it is what CI containers want.
+- **set** -- the suite tests that URL and starts nothing, for running against a
+  deployed environment.
+
+`APP_DIR` overrides the checkout, so the same suite can be pointed at another
+app without editing config.
+
+k6 is the exception: it does not start the app, so the load lane needs an
+instance already running.
