@@ -311,7 +311,13 @@ function cmdQueue (flags) {
     gating: [...new Set(gates(b.id).map(e => e.owner))].sort()
   })).sort((a, b) => b.gating.length - a.gating.length)
 
-  if (flags.json) return console.log(JSON.stringify(enriched, null, 2))
+  const openQuestions = entries
+    .filter(e => e.type === 'question' && e.status === 'open')
+    .sort((a, b) => (a.seq < b.seq ? -1 : 1))
+
+  if (flags.json) {
+    return console.log(JSON.stringify({ blockers: enriched, questions: openQuestions }, null, 2))
+  }
 
   const render = (list) => list.forEach(b => {
     const fan = b.gating.length
@@ -327,8 +333,25 @@ function cmdQueue (flags) {
   const forHuman = enriched.filter(b => b.waitingOn === 'human')
   forHuman.length ? render(forHuman) : console.log('  (nothing)')
   console.log('\nWAITING ON A LANE')
-  const forLayers = enriched.filter(b => b.waitingOn !== 'human')
-  forLayers.length ? render(forLayers) : console.log('  (nothing)')
+  const forLanes = enriched.filter(b => b.waitingOn !== 'human')
+  forLanes.length ? render(forLanes) : console.log('  (nothing)')
+
+  // An unanswered question is a blocked decision, so it belongs in the queue
+  // rather than only in an inbox nobody was told to read. Added after the hub
+  // missed two questions from the api lane: `status` and `queue` were the only
+  // commands the protocol required, and neither surfaced them.
+  const questions = entries
+    .filter(e => e.type === 'question' && e.status === 'open')
+    .sort((a, b) => (a.seq < b.seq ? -1 : 1))
+  console.log('\nAWAITING A DECISION')
+  if (!openQuestions.length) console.log('  (nothing)')
+  else {
+    for (const q of openQuestions) {
+      const when = ago(q.seq)
+      console.log(`  ${q.id}  ${q.title}`)
+      console.log(`      ${q.owner} -> ${q.to ?? 'unaddressed'}, asked ${when === 'just now' ? 'just now' : `${when} ago`}`)
+    }
+  }
 }
 
 function cmdStatus (flags) {

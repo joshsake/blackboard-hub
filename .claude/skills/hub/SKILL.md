@@ -26,12 +26,19 @@ the other lanes cannot read them.
 Always start from current state, not from memory of the conversation:
 
 ```bash
-node bin/board.mjs status    # who is live, who has stalled, per-lane git state
-node bin/board.mjs queue     # what is blocked, and how many lanes each blocker gates
+node bin/board.mjs status              # who is live, who has stalled, per-lane git state
+node bin/board.mjs queue               # blockers, and questions awaiting your decision
+node bin/board.mjs read --to hub --status open   # your own inbox
 ```
 
-`queue` sorts by fan-out deliberately: the top item is the single answer that
-unblocks the most work. Lead with it when reporting to the user.
+**Run all three, every time, before replying.** The third is not optional: a
+lane that asks you something has stopped waiting on itself and started waiting
+on you. The hub has already missed questions by checking only `status` and
+`queue` — which is why `queue` now has an AWAITING A DECISION section, and why
+the inbox read is listed here as a required step rather than a suggestion.
+
+`queue` sorts blockers by fan-out deliberately: the top item is the single
+answer that unblocks the most work. Lead with it when reporting to the user.
 
 ## Routing intent to a lane
 
@@ -89,9 +96,17 @@ cross-lane disagreement arrives as a `question` addressed to `hub`:
 node bin/board.mjs read --to hub --type question --status open
 ```
 
-Decide, record the decision as a `finding` addressed to both lanes, then close
-the question. A decision that lives only in your reply is invisible to every
-other lane.
+Decide, and record the decision as a `finding` addressed to the asking lane. A
+decision that lives only in your reply is invisible to every other lane.
+
+**You cannot close the question yourself** — the asking lane owns it, and the
+CLI will refuse you. Say so in the finding and ask them to close it once
+they have read your answer. That is the single-owner rule working, not a bug:
+the asker decides whether your answer actually settled the matter.
+
+Verify a lane's claims before acting on them. A lane reporting "15 specs green"
+or "the patch applies clean" is reporting, not proving — run it. Lanes have
+been right so far; that is a reason to keep checking, not to stop.
 
 ## The human queue
 
