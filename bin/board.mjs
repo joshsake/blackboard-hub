@@ -25,7 +25,11 @@ function mainCheckout () {
   } catch { return ROOT }
 }
 
-const BOARD = process.env.BLACKBOARD_DIR || join(mainCheckout(), 'board')
+// Every repo-relative path anchors here, not just the board. Resolved once:
+// status derives git state per lane, and this shells out to git.
+const MAIN = mainCheckout()
+
+const BOARD = process.env.BLACKBOARD_DIR || join(MAIN, 'board')
 const ENTRIES = join(BOARD, 'entries')
 const REGISTRY = join(BOARD, 'lanes.json')
 
@@ -89,7 +93,11 @@ function git (dir, cmd) {
 }
 
 function deriveGit (dir, { hubTop } = {}) {
-  const path = isAbsolute(dir) ? dir : join(ROOT, dir)
+  // Relative to the MAIN checkout, never to ROOT. lanes.json stores worktree
+  // paths relative (".", "../hub-lanes/api"), and ROOT is whichever checkout
+  // invoked the CLI -- so ROOT-relative resolution gives each lane a private,
+  // wrong view of every other lane. Same reason BOARD anchors on MAIN.
+  const path = isAbsolute(dir) ? dir : join(MAIN, dir)
   if (!existsSync(path)) return { state: 'missing' }
   if (!git(path, 'rev-parse --git-dir')) return { state: 'not-a-repo' }
 
@@ -141,9 +149,10 @@ function cmdRegister (flags) {
     lane,
     // The hub matches these against list_sessions to find the live session.
     cwd,
-    // list_sessions reports Windows paths with backslashes while node reports
-    // them with forward slashes, so a raw string compare never matches. Match
-    // on this instead -- separators unified, case folded, trailing slash gone.
+    // Match on this rather than on `cwd`. Registering from the session's own
+    // directory usually yields the same separators list_sessions reports, but
+    // a --cwd argument passed through Git Bash arrives with forward slashes,
+    // and case can differ. Separators unified, case folded, trailing slash gone.
     cwdKey: cwdKey(cwd),
     branch: git(cwd, 'rev-parse --abbrev-ref HEAD'),
     toplevel: git(cwd, 'rev-parse --show-toplevel'),
@@ -325,7 +334,10 @@ function cmdQueue (flags) {
 function cmdStatus (flags) {
   const registry = lanes()
   const entries = fold()
-  const hubTop = git(ROOT, 'rev-parse --show-toplevel')
+  // The hub's checkout, not the caller's: from a lane worktree ROOT would
+  // report that lane, and the shares-hub-checkout guard below would compare
+  // every lane against the wrong baseline.
+  const hubTop = git(MAIN, 'rev-parse --show-toplevel')
   const rows = Object.entries(registry).map(([name, meta]) => {
     const mine = entries.filter(e => e.owner === name)
     const last = lastActivity(name)
