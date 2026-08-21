@@ -115,9 +115,21 @@ test.describe('results shareable URL (contract_1f5a871e)', () => {
   })
 })
 
-/** Destination names in ranked order — the observable output of the scoring. */
+/**
+ * Destination names in ranked order — the observable output of the scoring.
+ *
+ * Asserts it found something before returning. Every vacuity defect this suite
+ * has had came from an empty extraction: two of them compared one empty list
+ * against another and passed. Guarding here makes the property structural, so a
+ * future spec cannot reintroduce it by forgetting -- the same trick the ui lane
+ * gets from completeWizard() asserting the URL before it returns. If a spec ever
+ * legitimately expects no destinations, it should say so at the call site rather
+ * than inherit silence from here.
+ */
 function names (html: string): string[] {
-  return [...html.matchAll(/<h2 class="text-2xl[^"]*">([^<]*)/g)].map((m) => m[1])
+  const found = [...html.matchAll(/<h2 class="text-2xl[^"]*">([^<]*)/g)].map((m) => m[1])
+  expect(found, 'names() extracted nothing — the page is broken or the heading markup moved').not.toHaveLength(0)
+  return found
 }
 
 function cards (html: string): number {
