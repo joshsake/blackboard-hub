@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Disclosure guard. Runs in EVERY lane worktree: core.hooksPath lives in the
+# shared config, so setting it once covers all linked worktrees.
+#
+# Enable (once per clone):
+#   git config core.hooksPath .githooks
+#
+# Bypass only with a reason you would defend in public:
+#   git commit --no-verify
+set -euo pipefail
+exec node "$(git rev-parse --show-toplevel)/bin/scan-secrets.mjs" --staged
