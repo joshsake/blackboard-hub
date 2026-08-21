@@ -164,9 +164,10 @@ explicit.
   calls `params.set`. The mechanism described above — key-existence controls
   emission, insertion order controls position — follows from that code as read.
 - The cited spec exists at `tests/ui/results-contract.spec.ts:52` with the
-  assertions quoted, at the browser suite's commit `dabb2de` — the revision
-  that last modified that file, and the one the suite's acceptance record
-  names.
+  assertions quoted, at the browser suite's commit `dabb2de` — the only
+  revision that has ever modified that file. (Older internal records call that
+  same commit `2ca5f74`; a history rewrite renamed it. Same commit, same
+  bytes.)
 
 **Cited from the browser-suite team's report, not re-run here:**
 
@@ -175,12 +176,12 @@ explicit.
   append instead of set turns specs 1, 2 and 3 red. The mutation runs and the
   clean revert are their result, reproduced here on their authority.
 - That the suite is 9/9 green against a local production build.
-- Note on their evidence pointer: two internal records label that run with a
-  commit hash that does not resolve in the repository, while a third names
-  `dabb2de`, which does and which matches the spec text quoted above. The
-  discrepancy is in the label, not in the spec — the file I read is the file the
-  assertions above come from. It has been raised separately with the suite's
-  owners; it does not affect any recommendation in this document.
+- Note on their evidence pointer: the commit hash in the original report,
+  `2ca5f74`, no longer resolves — a history rewrite on our side renamed it to
+  `dabb2de`, confirmed against the rewrite's own commit map. The rewrite
+  changed no content in this file; the rename propagated from an earlier
+  ancestor. Same commit, same spec, different label. Nothing about the finding
+  or the recommendations below is affected.
 
 **Not done at all, and worth stating plainly:**
 
