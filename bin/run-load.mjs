@@ -5,9 +5,9 @@
 //
 // k6 has no equivalent of Playwright's webServer block; it runs on its own
 // runtime and expects a URL to already exist. That gap is what this file fills,
-// and it deliberately mirrors playwright.config.ts rather than inventing a
-// second convention: same APP_DIR, same BASE_URL override, same port, same
-// build-then-start command, same reuse-an-existing-server behaviour.
+// and it follows playwright.config.ts rather than inventing a second
+// convention: same BASE_URL override, same build-then-start command, same
+// reuse-an-existing-server behaviour.
 //
 //   node bin/run-load.mjs              boot, run k6, tear down
 //   node bin/run-load.mjs --check      boot, probe, tear down -- everything
@@ -15,10 +15,15 @@
 //   BASE_URL=https://... npm run test:load    target a deployed environment,
 //                                             start and stop nothing.
 //
+// This lane builds and serves its OWN worktree of the app on its OWN port, both
+// read from board/lanes.json. Lanes previously shared one checkout and port
+// 3000, which let a run measure a server another lane started, or a build
+// carrying another lane's uncommitted mutation.
+//
 // Any extra arguments are forwarded to k6, so `npm run test:load -- --vus 50`
 // works.
 import { spawn, execSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { connect } from 'node:net'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -39,8 +44,29 @@ function mainCheckout () {
   } catch { return REPO }
 }
 
-const APP_DIR = process.env.APP_DIR || resolve(join(mainCheckout(), '..', 'wayfarer'))
-const LOCAL_PORT = 3000
+// Port and app worktree are assigned per lane in board/lanes.json, so they are
+// read from there rather than repeated here. Hardcoding 3103 in this file would
+// make the wrapper a second place the assignment has to be kept true, which is
+// the failure the registry exists to prevent.
+const LANE = 'load'
+function laneConfig () {
+  const registry = JSON.parse(readFileSync(join(mainCheckout(), 'board', 'lanes.json'), 'utf8'))
+  const lane = registry.lanes?.[LANE]
+  if (!lane) throw new Error(`board/lanes.json has no "${LANE}" lane`)
+  if (!lane.port) throw new Error(`board/lanes.json gives lane "${LANE}" no port`)
+  if (!lane.appWorktree) throw new Error(`board/lanes.json gives lane "${LANE}" no appWorktree`)
+  return lane
+}
+
+const LANE_CFG = laneConfig()
+
+// Every lane builds and serves its OWN worktree of the app on its OWN port.
+// Sharing either one meant a run could measure a server another lane started,
+// or a build carrying another lane's uncommitted mutation. The main app
+// checkout is deliberately not a fallback here: it belongs to the user, and
+// silently reaching for it is how a lane ends up mutating it again.
+const APP_DIR = process.env.APP_DIR || resolve(LANE_CFG.appWorktree)
+const LOCAL_PORT = Number(process.env.PORT) || LANE_CFG.port
 const LOCAL_URL = `http://localhost:${LOCAL_PORT}`
 const LOAD_SCRIPT = join(REPO, 'tests', 'load', 'baseline.js')
 const READY_TIMEOUT_MS = 180_000   // matches the playwright webServer timeout
@@ -126,14 +152,25 @@ async function waitForReady (url, child, timeoutMs = READY_TIMEOUT_MS) {
 function startApp () {
   if (!existsSync(APP_DIR)) {
     throw new Error(
-      `the app under test is not at ${APP_DIR}\n` +
-      '  Set APP_DIR to its checkout, or set BASE_URL to target a running instance.'
+      `this lane's app worktree is not at ${APP_DIR}\n` +
+      '  Create it once with:\n' +
+      `    git -C <app repo> worktree add -b lane-app/${LANE} ${APP_DIR} main\n` +
+      '  Or set BASE_URL to target an instance that is already running.'
     )
   }
-  // Build then start, exactly as playwright.config.ts does. The build is what
-  // makes a run work in CI, where the checkout arrives with no .next.
-  log(`starting the app under test in ${APP_DIR}`)
-  return spawn('npm run build && npm run start', {
+  // A freshly added worktree has the source but no node_modules, so the first
+  // build in it would fail on a missing next binary. Installing here keeps the
+  // one-command promise; it only happens once per worktree.
+  if (!existsSync(join(APP_DIR, 'node_modules'))) {
+    log(`no node_modules in ${APP_DIR} -- installing once (this takes a few minutes)`)
+    execSync('npm ci', { cwd: APP_DIR, stdio: 'inherit' })
+  }
+  // Build then start, as playwright.config.ts does. The build is what makes a
+  // run work from a clean checkout, which a per-lane worktree always is at
+  // first. The port is passed explicitly rather than left to PORT so that a
+  // stray PORT in the environment cannot move this lane onto another's.
+  log(`starting the app under test in ${APP_DIR} on port ${LOCAL_PORT}`)
+  return spawn(`npm run build && npm run start -- --port ${LOCAL_PORT}`, {
     cwd: APP_DIR,
     shell: true,
     detached: process.platform !== 'win32',
