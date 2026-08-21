@@ -12,14 +12,14 @@ import { fileURLToPath } from 'node:url'
 // machine and mutate the app under test as a matter of routine, so sharing a
 // port or a source tree corrupts evidence rather than merely slowing things
 // down. Each lane therefore gets its own port AND its own checkout of the app,
-// both declared in board/lanes.json:
+// both declared in board/lanes.json -- api on 3101, ui on 3102, each with its
+// own appWorktree. The values are NOT repeated here on purpose: they were once,
+// and lanes.json moved them from absolute to relative paths within the hour,
+// leaving this comment quietly describing a layout that no longer existed.
 //
-//   api   3101   C:/automation/wayfarer-lanes/api
-//   ui    3102   C:/automation/wayfarer-lanes/ui
-//
-// An `--project=api` run builds, serves and probes ONLY api's worktree on
-// 3101. Nothing here ever touches C:/automation/wayfarer itself -- that
-// checkout belongs to the user.
+// A --project=api run builds, serves and probes ONLY api's worktree on its own
+// port. Nothing here ever touches the shared wayfarer checkout -- that one
+// belongs to the user, and appDirFor refuses it outright.
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 
