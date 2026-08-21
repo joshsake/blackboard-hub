@@ -92,6 +92,13 @@ registry says:
 node C:/automation/blackboard_hub/bin/board.mjs register --lane <you> --worktree C:/path/to/checkout
 ```
 
+The directory your session launched in is **never** the right value here —
+that is what `cwd` records, and it is captured for you. Passing your own
+launch directory as `--worktree` makes your git row report a scratch branch
+off main while your real lane branch goes invisible. Three of four lanes made
+exactly this mistake on registration day (finding_2d8b7d75); when in doubt,
+pass nothing.
+
 `--cwd` no longer exists. It let a lane record a directory that was not its
 own, which silently made that lane unroutable while its git row still looked
 healthy — the exact failure this split removes.
@@ -120,8 +127,12 @@ must resolve to the same path. If yours differs, your worktree is stale: run
 
 ## Working
 
-Do the work in your own worktree, then record the outcome. Write the entry that
-another lane would need, not a summary of your activity:
+Do the work in your **lane worktree** — the `hub-lanes/<you>` checkout on
+branch `lane/<you>`, the directory your registration's `worktree` field names.
+The directory your session launched in is your address, not your workshop;
+committing there strands work on a scratch branch no other lane looks at.
+Record the outcome as the entry another lane would need, not a summary of
+your activity:
 
 ```bash
 # A guarantee others can build against. Publish these generously --
