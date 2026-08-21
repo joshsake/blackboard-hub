@@ -189,13 +189,19 @@ fields are separate because the two facts are independent.
 ```console
 $ npm run board -- registrations
 docs    claude/docs-lane-f6794e
-        session:  ....claudeworktreesdocs-lane-f6794e
-        worktree: ...hub-lanesdocs
+        session:  C:\automation\blackboard_hub\.claude\worktrees\docs-lane-f6794e
+        worktree: C:\automation\hub-lanes\docs
         registered just now
 ```
 
 A row flagged **foreign** means that worktree is not a checkout of this repo at
 all, so its git state is meaningless — fix that before working.
+
+`lanes.json` also carries `port` and `appWorktree` for the lanes that run the app
+under test, so it stays the single source of lane identity: each of those lanes
+builds and serves in its own checkout of the app on its own port, and mutates
+only there. See [Evidence and the stale-instance trap](#evidence-and-the-stale-instance-trap)
+for why that isolation exists.
 
 ---
 
@@ -291,11 +297,42 @@ Two skills encode the protocol so a session knows its role:
 
 ```bash
 npm run test:board     # 50 checks: ownership, fold semantics, fan-out, registration, board sharing
-npx playwright test    # 8 tests against the app under test
+npx playwright test    # 24 tests against the app under test (15 api, 9 ui)
 ```
 
 `test/shared-board.sh` exists because the private-board bug was found by hand and
 nothing in the suite would have caught it. It also names any lane running a stale
 CLI.
+
+---
+
+## Evidence and the stale-instance trap
+
+A suite that passes is not evidence that it works — it is indistinguishable from
+a suite that asserts nothing. Proving a spec catches what it names means causing
+that break and watching it go red.
+
+Which raises the question the whole practice turns on: **when the spec failed,
+what was it actually running against?**
+
+Two instances of getting that wrong have already happened here, and neither
+announced itself:
+
+- A mutation pass ran against **the previous mutation's binary**, because a
+  server was still up and `reuseExistingServer` skipped the build. It reported a
+  real failure caused by the wrong thing.
+- A board audit read **a lane worktree's committed copy of `board/`**, which is
+  frozen at that branch's last merge. It reported an entry as open that was
+  done.
+
+Both produced well-formed, plausible answers. Neither is detectable by reading
+the output — only by knowing which instance produced it. The defences are
+structural rather than careful: run with `BASE_URL` set so there is no server to
+reuse, and read board state only through the CLI or the path `board where`
+resolves, never a relative path into `board/`.
+
+The full protocol, including the probe step that makes a mutation report
+evidence rather than assertion:
+[tests/docs/mutation-evidence-protocol.md](tests/docs/mutation-evidence-protocol.md).
 
 Design rationale and the reasoning behind each decision: [docs/design.md](docs/design.md).

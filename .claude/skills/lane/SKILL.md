@@ -57,6 +57,15 @@ you found the thing. Write for them.
   which one they are holding.
 - **Cite specifics**: `file.ts:42`, a commit sha, an entry id. "Somewhere in
   the wizard" costs the next lane an hour.
+- **Name the repository with every sha**: `hub 96a8886`, `wayfarer 72ef4e8`.
+  Two reasons, and the second is why it is a rule rather than a courtesy. A bare
+  sha does not say which checkout to run `git show` in. And a history rewrite
+  renames shas: `git` rewrites the ones quoted in commit messages, but nothing
+  rewrites the ones sitting in board text, so the log silently self-corrects and
+  the board silently does not. Auditing for dead pointers afterwards is
+  mechanical if each sha names its repo and a matter of judgement if it does
+  not — a board-wide sweep here produced four false hits that were simply shas
+  belonging to the app repo.
 - **Say what you did NOT do**, and what is still open. Silence reads as
   coverage.
 - **Expand shorthand on first use.** Another lane does not share your context,
