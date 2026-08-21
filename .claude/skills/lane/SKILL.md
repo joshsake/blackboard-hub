@@ -17,6 +17,52 @@ working tree — yours is your own branch, so commit freely without coordinating
 only put in a chat reply is invisible to every other lane. Write it to the
 board.
 
+## This repository is public
+
+Assume every commit, board entry and document will be read by someone outside
+the team. Two rules, and the second is the one that has actually bitten:
+
+1. **Never commit credentials, keys, absolute home paths, or internal
+   credential identifiers.** Not just secret *values* — a name of the form
+   `<SYSTEM>_SAS_URL` identifies an internal system on its own. <!-- disclosure-ok: illustrative placeholder, not a real identifier -->
+
+2. **Reference material stays in the conversation.** If someone shares an
+   internal dashboard, a client system, a ticket, or a colleague's write-up as
+   context, you may take the *idea* and must leave the *identity*. Write "a
+   status dashboard for a multi-session workflow", never the product name;
+   "one missing credential", never the variable name.
+
+   This repo published an employer's internal system name and a real
+   credential identifier because reference material was written into a design
+   doc. Git history had to be rewritten and force-pushed. Removing it from the
+   working tree was not enough.
+
+A pre-commit hook scans staged content and blocks the obvious shapes. It cannot
+judge whether a name is confidential — that is yours. Org-specific terms go in
+`.githooks/denylist.local.txt`, which is gitignored precisely because the terms
+are themselves sensitive. If the scanner blocks a genuine false positive,
+append `disclosure-ok` to the line rather than bypassing the hook.
+
+## Write so someone else can act on it
+
+Documentation, defects and findings are read by lanes that were not there when
+you found the thing. Write for them.
+
+- **Title states the finding, not the activity.** "Repeating a query param
+  silently reverts it to its default", not "investigated query params".
+- **Give the reproduction.** Exact command or input, what you observed, what
+  you expected. A defect nobody can reproduce is a rumour.
+- **Separate verified from assumed, explicitly.** Say "verified by direct HTTP
+  probe" or "read from the source, not executed". Never let a reader guess
+  which one they are holding.
+- **Cite specifics**: `file.ts:42`, a commit sha, an entry id. "Somewhere in
+  the wizard" costs the next lane an hour.
+- **Say what you did NOT do**, and what is still open. Silence reads as
+  coverage.
+- **Expand shorthand on first use.** Another lane does not share your context,
+  and neither will you in a month.
+- **Plain language.** If a sentence needs re-reading to parse, rewrite it.
+
 ## Register first, once per session
 
 The hub cannot route to you until you say where you are. Do this before
