@@ -119,7 +119,10 @@ function appDirFor (lane: ProjectName): string {
     return resolve(process.env.APP_DIR)
   }
 
-  const dir = resolve(configured)
+  // lanes.json paths are relative to the hub root (see its _comment); resolving
+  // against cwd only works by coincidence of this machine layout. resolve()
+  // ignores MAIN when configured is absolute, so both forms stay valid.
+  const dir = resolve(MAIN, configured)
   const shared = resolve(join(MAIN, '..', 'wayfarer'))
   if (dir === shared) {
     throw new Error(
