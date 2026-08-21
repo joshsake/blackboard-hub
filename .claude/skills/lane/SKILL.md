@@ -20,23 +20,45 @@ board.
 ## Register first, once per session
 
 The hub cannot route to you until you say where you are. Do this before
-anything else:
-
-```bash
-node bin/board.mjs register --lane <you>
-```
-
-It records your working directory and branch, and re-registering just moves
-you — safe to run every session. If you are working outside the hub checkout,
-call it by absolute path:
+anything else, **run from your own session, by absolute path**:
 
 ```bash
 node C:/automation/blackboard_hub/bin/board.mjs register --lane <you>
 ```
 
-You may live anywhere; the hub finds you by what you registered, not by where
-it expected you to be. An unregistered lane is unreachable — the hub will say
-so rather than guess.
+Re-registering just moves you, so it is safe to run every session.
+
+**Two different directories, and they are usually not the same one:**
+
+| field | what it means | how it is set |
+| --- | --- | --- |
+| `cwd` | where your **session** runs — the hub's routing target | captured automatically; you cannot pass it |
+| `worktree` | which checkout holds your **work** — where git state is read | defaults to your `lanes.json` entry; `--worktree` to override |
+
+Sessions live where they were launched, which is typically *not* your lane
+worktree — often not even the same repository. That is normal and needs no
+fixing. Registering from your own session gets both fields right by default.
+
+Only pass `--worktree` if your work genuinely lives somewhere other than the
+registry says:
+
+```bash
+node C:/automation/blackboard_hub/bin/board.mjs register --lane <you> --worktree C:/path/to/checkout
+```
+
+`--cwd` no longer exists. It let a lane record a directory that was not its
+own, which silently made that lane unroutable while its git row still looked
+healthy — the exact failure this split removes.
+
+Check yourself afterwards:
+
+```bash
+node C:/automation/blackboard_hub/bin/board.mjs registrations
+```
+
+If your row is flagged **foreign**, your worktree is not a checkout of the hub
+repo at all and its git state is meaningless — fix that before working. An
+unregistered lane is simply unreachable; the hub will say so rather than guess.
 
 ## Start every session by reading
 
