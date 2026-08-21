@@ -68,7 +68,15 @@ test.describe('results shareable URL (contract_1f5a871e)', () => {
   test('missing params fall back to the documented defaults', async ({ request }) => {
     const bare = await request.get('/results')
     const explicit = await request.get('/results?party=solo&vibe=mix&splurges=&transit=car&detail=essentials')
-    expect(names(await explicit.text())).toEqual(names(await bare.text()))
+    // Both sides are asserted alive first. Comparing extractions alone made
+    // this test pass while /results returned 500 to every request: names()
+    // found nothing in either error page, and nothing equals nothing. Verified
+    // by making the route throw -- 11 of the 15 went red and this one did not.
+    expect(bare.status()).toBe(200)
+    expect(explicit.status()).toBe(200)
+    const ranking = names(await bare.text())
+    expect(ranking).toHaveLength(3)
+    expect(names(await explicit.text())).toEqual(ranking)
   })
 
   // Repeating a param arrives as an array, fails the string check, and reverts
