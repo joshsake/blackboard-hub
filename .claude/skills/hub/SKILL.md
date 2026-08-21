@@ -44,6 +44,18 @@ between what was verified and what was assumed, and specific citations
 (`file:line`, a sha, an entry id). Send it back if a claim cannot be acted on
 without asking the author a question.
 
+Shas are cited with their repository — `hub 96a8886`, `wayfarer 72ef4e8` — and
+that is worth enforcing on acceptance rather than fixing later. A bare sha does
+not say where to resolve it, and a history rewrite renames shas in the commit
+log while leaving board text untouched, so citations rot without any entry
+changing. Repo-prefixed shas make the resulting audit mechanical; bare ones make
+it a judgement call about which repository each token belonged to.
+
+When accepting evidence from a test run, ask what it ran against. A suite can
+pass against a stale server or an audit can read a stale copy of `board/`, and
+both report plainly and wrongly. A mutation report needs its probe output;
+without one it is an assertion.
+
 ## Before acting, look
 
 Always start from current state, not from memory of the conversation:

@@ -74,6 +74,10 @@ one. `board/lanes.json` keys lanes on stable identity (name, folder,
 expected session title); the hub resolves a lane to a live session at
 dispatch time via `list_sessions`.
 
+`lanes.json` alone proved insufficient in practice, because it records where a
+lane's work *should* live and nothing records where its session actually is.
+See decision 8.
+
 ### 6. Superseding is a partial update
 
 An entry is revised by re-appending under the same `id`. Fields not supplied
@@ -85,14 +89,71 @@ merely closed a question silently destroyed its routing, body and refs.
 The board is its own git repo. History, blame, and rollback come free, and
 `pull`/`push` becomes the sync mechanism if it ever needs to span machines.
 
+### 8. Registration splits "where the session is" from "where the work is"
+
+Decision 5 resolves a lane to a session at dispatch time, which needs the
+session's `cwd`. Per-lane git state needs the lane's *checkout*. These were
+initially one field, and they are not the same directory: sessions live where
+the user launched them, which on this machine was never the lane worktree, for
+any lane.
+
+One field asked to name two directories fails whichever way it is set:
+
+| recorded value | routing | git state |
+| --- | --- | --- |
+| the session's own cwd | works | reports the launching repo's branch — hid commits sitting on the lane branch, while reading clean |
+| the lane worktree | falls through to title matching, which decision 5 forbids | correct |
+
+So `board register` records both, independently:
+
+- `cwd` — always the registering process's own directory, never passable. The
+  routing target.
+- `worktree` — the checkout whose git state *is* this lane's work. Defaults to
+  the `lanes.json` entry, overridable with `--worktree` for a lane that has
+  moved.
+
+A `--cwd` flag existed and was removed. It let a lane record a directory that
+was not its own, which silently disabled the routing match while the git row
+still looked healthy — the exact failure the split removes.
+
+Because the two can now disagree, they can also be checked: a worktree that is
+not a checkout of this repo is flagged `foreign` by `board registrations`, since
+its derived git state is meaningless rather than merely wrong.
+
+### 9. The disclosure guard is mechanical; the judgement is not delegated
+
+This repo is public, and it has already published an employer's internal system
+name and a real credential identifier — pulled in when reference material from a
+conversation was written into a tracked design doc. History had to be rewritten
+and force-pushed.
+
+`bin/scan-secrets.mjs` runs both as a pre-commit hook over staged content and as
+the first step of `npm run test:board` over every tracked file. Two classes of
+pattern, separated because they need opposite handling:
+
+- **Built-in patterns** — tokens, private keys, home paths, and any
+  `*_TOKEN`/`*_SECRET`/`*_SAS_URL`-shaped identifier. Safe to keep in a tracked
+  file, because the pattern is not the secret. The credential-name rule is there
+  because a name alone was enough to identify an internal system.
+- **Local terms** — `.githooks/denylist.local.txt`, deliberately gitignored.
+  Employer and internal system names are themselves the sensitive thing, so a
+  committed denylist would disclose exactly what it exists to prevent.
+
+The scanner catches shapes. It cannot tell whether a proper noun is
+confidential, so the rule that reference material stays in the conversation
+lives in the lane and hub skills, where a human-facing instruction belongs. A
+false positive is annotated with `disclosure-ok` on the line rather than
+bypassed with `--no-verify`, so the exception stays reviewable.
+
 ## Entry types
 
 | Type | Purpose | Typical owner |
 |---|---|---|
 | `contract` | shared interface facts — endpoint shapes, selectors, env config | the lane that owns the surface |
 | `task` | work assigned to a lane, with status | hub |
-| `finding` | results, failures, blockers | any lane |
+| `finding` | results, failures, measurements | any lane |
 | `question` | open cross-lane question awaiting an answer | any lane |
+| `blocker` | something stopping work, carrying `waitingOn: human | <lane>` | the blocked lane |
 
 Common fields: `id`, `type`, `owner`, `seq`, `status`, `title`, `body`, `refs`.
 
@@ -148,8 +209,6 @@ board write, so the hub can tell who to poke rather than guessing.
 
 ## Not yet built
 
-- The hub and lane skills that encode the protocol (receive intent, resolve
-  lane, dispatch, record; and read board, work, write back, signal).
 - Scraping beyond git. PRs and tickets are derived state in that prior art and
   should be here too, but need `gh`/tracker access to be worth adding.
 - Nothing watches the board; activation remains push-only.

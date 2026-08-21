@@ -1,5 +1,5 @@
 {
-  "_comment": "Stable lane identity. Session IDs are deliberately absent -- they change whenever a session restarts. The hub resolves a lane to a live session at dispatch time from list_sessions, matching cwd against worktree first, then branch, and only falling back to sessionTitle (auto-generated titles drift, so routing must never depend on one). worktree is the checkout a lane session works in and where its git state is read from; dir is where that lane code lives inside it.",
+  "_comment": "Stable lane identity. Session IDs are deliberately absent -- they change whenever a session restarts. The hub resolves a lane to a live session at dispatch time from list_sessions, matching cwd against worktree first, then branch, and only falling back to sessionTitle (auto-generated titles drift, so routing must never depend on one). worktree is the checkout a lane session works in and where its git state is read from; dir is where that lane code lives inside it. Relative paths (worktree, appWorktree) resolve against the hub repo root, never against the invoking checkout.",
   "lanes": {
     "hub": {
       "role": "Control. Receives intent, routes to lanes, arbitrates questions.",
@@ -12,21 +12,27 @@
       "worktree": "../hub-lanes/api",
       "dir": "tests/api",
       "sessionTitle": "API Lane",
-      "branch": "lane/api"
+      "branch": "lane/api",
+      "port": 3101,
+      "appWorktree": "../wayfarer-lanes/api"
     },
     "ui": {
       "role": "Playwright browser tests, selectors, page objects.",
       "worktree": "../hub-lanes/ui",
       "dir": "tests/ui",
       "sessionTitle": "UI Lane",
-      "branch": "lane/ui"
+      "branch": "lane/ui",
+      "port": 3102,
+      "appWorktree": "../wayfarer-lanes/ui"
     },
     "load": {
       "role": "k6 load and performance tests, thresholds, scenarios.",
       "worktree": "../hub-lanes/load",
       "dir": "tests/load",
       "sessionTitle": "Load Lane",
-      "branch": "lane/load"
+      "branch": "lane/load",
+      "port": 3103,
+      "appWorktree": "../wayfarer-lanes/load"
     },
     "docs": {
       "role": "Documentation, PR bodies, result write-ups.",
