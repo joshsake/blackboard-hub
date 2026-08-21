@@ -111,16 +111,17 @@ Common fields: `id`, `type`, `owner`, `seq`, `status`, `title`, `body`, `refs`.
 - Should the hub read lane state from the board only, or also fold in
   `list_events` transcripts?
 
-## Borrowed from the prior art
+## Borrowed from prior art
 
-The prior art (a working system on another machine) surfaced three ideas
-this design originally missed. Adopted here; no compatibility is maintained
-with it, since the two are independent.
+Three ideas came from a status dashboard for a multi-session workflow that
+predates this project. Adopted here; the two are independent and no
+compatibility is maintained.
 
 ### Derived state beats declared state
 
-The dashboard scrapes branch, ahead/dirty counts, PRs and ticket counts rather
-than having each lane type them. Only `focus` and `blocked` are narrative.
+That dashboard scrapes branch, ahead/dirty counts, PRs and ticket counts
+rather than having each lane type them. Only `focus` and `blocked` are
+narrative.
 
 That split is now explicit here. `board status` derives git state per lane by
 shelling out; lanes cannot write it. Hand-maintained facts rot silently while
@@ -129,10 +130,10 @@ entry.
 
 ### The human is a queued resource, and blockers fan out
 
-The dashboard's "Waiting on Josh" list is the real bottleneck, and one item
-(`REDACTED_CREDENTIAL`) gated two lanes at once. A design that only records
-"this lane is blocked" cannot show that a single unblock releases several
-lanes.
+Its "waiting on a human" list was the real bottleneck, and a single unresolved
+item -- one missing credential -- gated two lanes at once. A design that only
+records "this lane is blocked" cannot show that a single unblock releases
+several lanes.
 
 So `blocker` is an entry type, carrying `waitingOn: human | <lane>`. Other
 entries `refs` it, and `board queue` reports fan-out -- how many distinct
@@ -149,7 +150,7 @@ board write, so the hub can tell who to poke rather than guessing.
 
 - The hub and lane skills that encode the protocol (receive intent, resolve
   lane, dispatch, record; and read board, work, write back, signal).
-- Scraping beyond git. PRs and tickets are derived state in the dashboard and
+- Scraping beyond git. PRs and tickets are derived state in that prior art and
   should be here too, but need `gh`/tracker access to be worth adding.
 - Nothing watches the board; activation remains push-only.
 
