@@ -56,6 +56,14 @@ pass against a stale server or an audit can read a stale copy of `board/`, and
 both report plainly and wrongly. A mutation report needs its probe output;
 without one it is an assertion.
 
+Ask the same question of a passing spec: could it have failed? An equality-only
+assertion between two responses cannot fail when both sides break the same way,
+and one here passed through a total outage of its own route.
+
+Registry values are pointed at, not restated. A lane that repeats a port or a
+path in prose has written a citation nothing audits, and it will drift silently
+while the executable copy of the same value fails loudly.
+
 ## Before acting, look
 
 Always start from current state, not from memory of the conversation:

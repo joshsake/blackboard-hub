@@ -296,9 +296,14 @@ Two skills encode the protocol so a session knows its role:
 ## Tests
 
 ```bash
-npm run test:board     # 50 checks: ownership, fold semantics, fan-out, registration, board sharing
-npx playwright test    # 24 tests against the app under test (15 api, 9 ui)
+npm run test:board     # ownership, fold semantics, fan-out, registration, board sharing
+npx playwright test    # the api and ui suites, against the app under test
 ```
+
+Neither line quotes a test count. `--list` derives one and a hand-maintained
+figure only rots — this one went from 8 to 24 within a day. Same reasoning as
+[Part 4 of the evidence protocol](tests/docs/mutation-evidence-protocol.md):
+point at the thing, do not copy it.
 
 `test/shared-board.sh` exists because the private-board bug was found by hand and
 nothing in the suite would have caught it. It also names any lane running a stale
@@ -315,8 +320,8 @@ that break and watching it go red.
 Which raises the question the whole practice turns on: **when the spec failed,
 what was it actually running against?**
 
-Two instances of getting that wrong have already happened here, and neither
-announced itself:
+Four instances of getting that wrong have happened here, and none announced
+itself:
 
 - A mutation pass ran against **the previous mutation's binary**, because a
   server was still up and `reuseExistingServer` skipped the build. It reported a
@@ -324,15 +329,20 @@ announced itself:
 - A board audit read **a lane worktree's committed copy of `board/`**, which is
   frozen at that branch's last merge. It reported an entry as open that was
   done.
+- A spec compared two responses for equality while **every request to the route
+  it tests returned 500**. Both extractions found nothing, nothing equalled
+  nothing, and it passed through a total outage.
+- A comment restated paths that later moved. The executable copy of the same
+  value failed loudly; **the prose copy just went on being wrong**, because
+  nothing audits a comment.
 
-Both produced well-formed, plausible answers. Neither is detectable by reading
-the output — only by knowing which instance produced it. The defences are
-structural rather than careful: run with `BASE_URL` set so there is no server to
-reuse, and read board state only through the CLI or the path `board where`
-resolves, never a relative path into `board/`.
+Each produced a well-formed, plausible answer, and none is detectable by reading
+the output. The defences are structural rather than careful: probe which build
+is actually serving, read board state only through the CLI, assert two responses
+are alive before asserting they agree, and read a registry value rather than
+restating it.
 
-The full protocol, including the probe step that makes a mutation report
-evidence rather than assertion:
+The full protocol:
 [tests/docs/mutation-evidence-protocol.md](tests/docs/mutation-evidence-protocol.md).
 
 Design rationale and the reasoning behind each decision: [docs/design.md](docs/design.md).
