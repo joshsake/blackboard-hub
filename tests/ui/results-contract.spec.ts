@@ -159,6 +159,14 @@ test.describe('wizard conforms to the /results contract', () => {
     for (let i = 0; i < 3; i++) {
       const details = cards.nth(i).locator('details')
       await expect(details).toHaveJSProperty('open', false)
+
+      // toBeAttached() BEFORE not.toBeVisible(), because a negative assertion
+      // is satisfied by ABSENCE: with no highlights rendered at all, the line
+      // below passes and reports a correctly collapsed card. Raised by the api
+      // lane, which had a spec stay green while /results returned 500 to every
+      // request — it compared two extractions that were both empty. Assert the
+      // content is there, then that it is hidden.
+      await expect(details.locator('li').first()).toBeAttached()
       await expect(details.locator('li').first()).not.toBeVisible()
     }
   })

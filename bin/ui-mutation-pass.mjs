@@ -74,6 +74,14 @@ const MUTATIONS = [
     replace: '<details className="mt-4 group" open={true}>',
     expect: 'detail=essentials leaves every card collapsed',
     why: 'The mirror of M4. Without a collapsed-case spec, always-open content would satisfy the expanded-case spec too -- this is what gives that pair teeth.'
+  },
+  {
+    id: 'M6-highlights-gone',
+    file: RESULTS,
+    find: '                {rec.destination.highlights.map((highlight) => (\n                  <li key={highlight}>{highlight}</li>\n                ))}\n                <li className="text-stone-400">\n                  Rough budget: ~${rec.destination.dailyCost}/day per person\n                </li>',
+    replace: '',
+    expect: 'detail=essentials leaves every card collapsed',
+    why: 'Added after the api lane found a spec of theirs passing while every response was a 500, because it compared two empty extractions. The collapsed-case spec had the same shape: not.toBeVisible() is satisfied by an element that does not exist, so rendering NO highlights looked identical to a correctly collapsed card. This mutation is the proof -- before the toBeAttached() guard it left the suite fully green, which is the definition of a blind spec.'
   }
 ]
 
