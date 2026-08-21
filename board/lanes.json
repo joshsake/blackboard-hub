@@ -12,21 +12,27 @@
       "worktree": "../hub-lanes/api",
       "dir": "tests/api",
       "sessionTitle": "API Lane",
-      "branch": "lane/api"
+      "branch": "lane/api",
+      "port": 3101,
+      "appWorktree": "C:/automation/wayfarer-lanes/api"
     },
     "ui": {
       "role": "Playwright browser tests, selectors, page objects.",
       "worktree": "../hub-lanes/ui",
       "dir": "tests/ui",
       "sessionTitle": "UI Lane",
-      "branch": "lane/ui"
+      "branch": "lane/ui",
+      "port": 3102,
+      "appWorktree": "C:/automation/wayfarer-lanes/ui"
     },
     "load": {
       "role": "k6 load and performance tests, thresholds, scenarios.",
       "worktree": "../hub-lanes/load",
       "dir": "tests/load",
       "sessionTitle": "Load Lane",
-      "branch": "lane/load"
+      "branch": "lane/load",
+      "port": 3103,
+      "appWorktree": "C:/automation/wayfarer-lanes/load"
     },
     "docs": {
       "role": "Documentation, PR bodies, result write-ups.",
