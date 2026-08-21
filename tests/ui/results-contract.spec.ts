@@ -90,6 +90,13 @@ test.describe('wizard conforms to the /results contract', () => {
 
     // And on the wire it is the percent-encoded comma the contract names.
     expect(url.search).toContain('splurges=hotel%2Cfood')
+
+    // AUDITED, and left as it is deliberately. not.toContain() is a negative
+    // assertion, so an empty url.search would satisfy it by absence -- the
+    // failure mode that let an api spec pass while every response was a 500.
+    // Here the toContain() directly above already proves url.search is
+    // non-empty, so this line cannot pass vacuously. Do not move it above that
+    // assertion, and do not delete that assertion.
     expect(url.search).not.toContain('splurges=hotel&')
 
     // The other four must survive the multi-select step unchanged.
@@ -159,6 +166,14 @@ test.describe('wizard conforms to the /results contract', () => {
     for (let i = 0; i < 3; i++) {
       const details = cards.nth(i).locator('details')
       await expect(details).toHaveJSProperty('open', false)
+
+      // toBeAttached() BEFORE not.toBeVisible(), because a negative assertion
+      // is satisfied by ABSENCE: with no highlights rendered at all, the line
+      // below passes and reports a correctly collapsed card. Raised by the api
+      // lane, which had a spec stay green while /results returned 500 to every
+      // request — it compared two extractions that were both empty. Assert the
+      // content is there, then that it is hidden.
+      await expect(details.locator('li').first()).toBeAttached()
       await expect(details.locator('li').first()).not.toBeVisible()
     }
   })
