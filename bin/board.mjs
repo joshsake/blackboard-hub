@@ -108,6 +108,11 @@ function deriveGit (dir, { hubTop } = {}) {
   const top = git(path, 'rev-parse --show-toplevel')
   const shared = hubTop !== undefined && top !== null && top === hubTop
 
+  // Not merely a different directory -- a different PROJECT. A lane pointed at
+  // an unrelated checkout still reports a branch and a dirty count, so the row
+  // looks healthy while describing something else entirely.
+  const foreign = HUB_COMMON !== null && commonDir(path) !== HUB_COMMON
+
   const branch = git(path, 'rev-parse --abbrev-ref HEAD')
   const dirty = (git(path, 'status --porcelain') || '').split('\n').filter(Boolean).length
   const counts = git(path, 'rev-list --left-right --count @{u}...HEAD')
@@ -118,7 +123,7 @@ function deriveGit (dir, { hubTop } = {}) {
     behind = Number(b)
     ahead = Number(a)
   }
-  return { state: shared ? 'shares-hub-checkout' : 'ok', branch, dirty, ahead, behind }
+  return { state: shared ? 'shares-hub-checkout' : 'ok', branch, dirty, ahead, behind, foreign }
 }
 
 // Canonical form for comparing a registered cwd against a session's reported
@@ -126,6 +131,17 @@ function deriveGit (dir, { hubTop } = {}) {
 function cwdKey (p) {
   return String(p).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
 }
+
+// Every worktree of one repo shares a single .git directory, so
+// --git-common-dir returns the same path from all of them. Comparing against
+// the hub's is how we tell "another worktree of this project" apart from "an
+// unrelated project entirely".
+function commonDir (dir) {
+  const d = git(dir, 'rev-parse --path-format=absolute --git-common-dir')
+  return d ? cwdKey(d) : null
+}
+
+const HUB_COMMON = commonDir(MAIN)
 
 function readRegistration (lane) {
   const f = join(REGISTRATIONS, `${lane}.json`)
@@ -136,33 +152,64 @@ function readRegistration (lane) {
 // A lane announces where it is; the hub does not predict it. Path conventions
 // break the moment a session is opened somewhere unexpected, and they fail
 // silently -- an unregistered lane is at least visibly unregistered.
+//
+// TWO facts, deliberately separate, because on a real machine they are two
+// different directories: a session lives where the user launched it, and the
+// lane's work lives in its worktree. One field cannot name both -- routing
+// needs the former, git state needs the latter, and a field asked to be both
+// is silently wrong for whichever caller you are not currently looking at.
 function cmdRegister (flags) {
   const registry = lanes()
   const lane = flags.lane
   if (!lane) die('--lane is required')
   if (!registry[lane]) die(`unknown lane "${lane}". known: ${Object.keys(registry).join(', ')}`)
+  if (flags.cwd !== undefined) {
+    die('--cwd was removed. It let a lane record a directory that was not its\n' +
+        '       own, which silently made that lane unroutable. cwd is now always\n' +
+        '       this process\'s. To point git state elsewhere, use --worktree.')
+  }
 
-  const cwd = flags.cwd && flags.cwd !== true ? flags.cwd : process.cwd()
-  if (!existsSync(cwd)) die(`cwd does not exist: ${cwd}`)
+  // Never overridable. The hub matches this against list_sessions, so any
+  // value other than the real one can only make this lane unreachable.
+  const cwd = process.cwd()
+
+  // Where this lane's WORK lives. The registry is the normal answer;
+  // --worktree covers a lane whose checkout genuinely sits somewhere else.
+  const explicit = flags.worktree && flags.worktree !== true
+  const declared = explicit ? flags.worktree : (registry[lane].worktree || registry[lane].dir)
+  const worktree = isAbsolute(declared) ? declared : join(MAIN, declared)
+  // Only an EXPLICIT --worktree is validated. A registry default that does not
+  // exist on this machine is not grounds for refusing to register: status
+  // already reports a missing checkout, and dying here would leave the lane
+  // unroutable over what is only a git-state problem.
+  if (explicit && !existsSync(worktree)) die(`worktree does not exist: ${worktree}`)
 
   const record = {
     lane,
-    // The hub matches these against list_sessions to find the live session.
+    // --- ROUTING. Describes the SESSION, never the lane's checkout. ---
     cwd,
-    // Match on this rather than on `cwd`. Registering from the session's own
-    // directory usually yields the same separators list_sessions reports, but
-    // a --cwd argument passed through Git Bash arrives with forward slashes,
-    // and case can differ. Separators unified, case folded, trailing slash gone.
+    // Match on this rather than on `cwd`: list_sessions reports Windows paths
+    // with backslashes while node reports forward slashes, and case can
+    // differ. Separators unified, case folded, trailing slash gone.
     cwdKey: cwdKey(cwd),
     branch: git(cwd, 'rev-parse --abbrev-ref HEAD'),
     toplevel: git(cwd, 'rev-parse --show-toplevel'),
+    // --- GIT STATE. status derives branch, ahead/behind and dirty from here,
+    // never from cwd, which is only where the session happens to run. ---
+    worktree,
     registeredAt: new Date().toISOString()
   }
   mkdirSync(REGISTRATIONS, { recursive: true })
   writeFileSync(join(REGISTRATIONS, `${lane}.json`), JSON.stringify(record, null, 2) + '\n')
+
+  const wt = deriveGit(worktree)
   console.log(`registered ${lane}`)
-  console.log(`  cwd:    ${record.cwd}`)
-  console.log(`  branch: ${record.branch ?? '(not a git checkout)'}`)
+  console.log(`  session:  ${record.cwd}  (${record.branch ?? 'not a git checkout'})`)
+  console.log(`  worktree: ${record.worktree}  (${wt.branch ?? wt.state})`)
+  if (wt.foreign) {
+    console.log('  WARNING: that worktree is not part of the hub repo, so this lane\'s')
+    console.log('           git state will be read from an unrelated project.')
+  }
 }
 
 function cmdRegistrations (flags) {
@@ -172,8 +219,11 @@ function cmdRegistrations (flags) {
   for (const r of rows) {
     if (!r.registeredAt) { console.log(`${r.lane.padEnd(7)} UNREGISTERED`); continue }
     console.log(`${r.lane.padEnd(7)} ${r.branch ?? '(no branch)'}`)
-    console.log(`        ${r.cwd}`)
-    console.log(`        registered ${ago(r.registeredAt)} ago`)
+    console.log(`        session:  ${r.cwd}`)
+    console.log(`        worktree: ${r.worktree ?? '(pre-split registration — re-register)'}`)
+    // ago() already returns the phrase "just now", so it cannot take " ago".
+    const when = ago(r.registeredAt)
+    console.log(`        registered ${when === 'just now' ? 'just now' : `${when} ago`}`)
   }
 }
 
@@ -370,12 +420,13 @@ function cmdStatus (flags) {
       charter: meta.role,
       last,
       idle: ago(last),
-      registered: reg ? { cwd: reg.cwd, branch: reg.branch, at: reg.registeredAt } : null,
-      // Git state belongs to the lane's checkout, not to the folder its code
-      // sits in -- a subfolder would only ever report the enclosing checkout.
-      // A registration is where the lane says it actually is, so it wins over
-      // the configured guess.
-      git: deriveGit(reg?.cwd || meta.worktree || meta.dir, {
+      registered: reg
+        ? { cwd: reg.cwd, worktree: reg.worktree, branch: reg.branch, at: reg.registeredAt }
+        : null,
+      // Git state belongs to the lane's WORKTREE. Never reg.cwd: that is where
+      // the session runs, which on any machine where sessions are launched
+      // outside the lane checkouts is a different repository altogether.
+      git: deriveGit(reg?.worktree || meta.worktree || meta.dir, {
         hubTop: name === 'hub' ? undefined : hubTop
       }),
       open: mine.filter(e => e.status === 'open').length,
@@ -392,6 +443,12 @@ function cmdStatus (flags) {
     console.log(`        ${r.charter}`)
     if (!r.registered) {
       console.log('        NOT REGISTERED — run: board register --lane ' + r.lane)
+    } else {
+      // Both, always. They differ in the normal case, so warning on that would
+      // fire on every row and teach everyone to ignore it; showing them makes
+      // the split self-evident instead of alarming.
+      console.log(`        session:  ${r.registered.cwd}`)
+      console.log(`        worktree: ${r.registered.worktree ?? '(pre-split registration — re-register)'}`)
     }
     if (r.git.state === 'ok') {
       const parts = [r.git.branch]
@@ -402,6 +459,12 @@ function cmdStatus (flags) {
       console.log('        git: (shares hub checkout — no lane state; needs its own worktree)')
     } else {
       console.log(`        git: (${r.git.state})`)
+    }
+    // The exceptional case worth shouting about: the git state above is real,
+    // and belongs to some other project.
+    if (r.git.foreign) {
+      console.log('        WARNING: that worktree is not part of the hub repo — the')
+      console.log('                 git state above belongs to an unrelated project.')
     }
     console.log(`        open:${r.open}  inbox:${r.inbox}  blockers:${r.blockers}`)
     console.log()
@@ -440,7 +503,8 @@ switch (process.argv[2]) {
   board queue  [--json]     what is blocked, and how many lanes each blocker gates
   board status [--json]     per-lane liveness + derived git state
   board lanes [--json]
-  board register --lane <l> [--cwd <path>]   declare where this lane is running
+  board register --lane <l> [--worktree <path>]  declare where this lane runs
+                                            (cwd is captured automatically)
   board registrations [--json]              where each lane says it lives
   board where               resolved board path (identical from every worktree)
 
