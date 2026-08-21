@@ -70,6 +70,18 @@ you found the thing. Write for them.
   coverage.
 - **Expand shorthand on first use.** Another lane does not share your context,
   and neither will you in a month.
+- **Point at a value, never restate it.** `board/lanes.json` is the single
+  source for ports and app worktrees; consumers read it or name it. A restated
+  value in code is a bug a test catches. A restated value in prose is a citation
+  nothing audits — it simply goes on being wrong, which is how a config comment
+  came to describe a layout that no longer existed. Same reason the README
+  quotes no test count.
+- **A claim that cannot fail is not a claim.** Before writing "these two agree",
+  ask what happens if neither exists. An equality-only assertion between two
+  responses cannot fail when both sides break the same way: one spec here
+  compared two extractions that were both empty and passed through a total
+  outage of the route it existed to test. Assert alive and well-shaped, then
+  assert equal.
 - **Plain language.** If a sentence needs re-reading to parse, rewrite it.
 
 ## Register first, once per session
