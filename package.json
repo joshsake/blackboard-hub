@@ -9,7 +9,8 @@
     "test:board": "node bin/scan-secrets.mjs && bash test/smoke.sh && bash test/queue.sh && bash test/register.sh && bash test/shared-board.sh",
     "test:api": "playwright test --project=api",
     "test:ui": "playwright test --project=ui",
-    "test:load": "k6 run tests/load/baseline.js"
+    "test:load": "node bin/run-load.mjs",
+    "test:load:check": "node bin/run-load.mjs --check"
   },
   "devDependencies": {
     "@playwright/test": "^1.47.0"
