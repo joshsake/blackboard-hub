@@ -43,7 +43,13 @@ test.describe('results shareable URL (contract_1f5a871e)', () => {
     const [a, b] = await Promise.all([request.get(FULL), request.get(shuffled)])
     expect(a.status()).toBe(200)
     expect(b.status()).toBe(200)
-    expect(names(await b.text())).toEqual(names(await a.text()))
+    // The ranking is asserted non-empty before the two are compared. Status
+    // alone is not enough here: rename the heading class and names() extracts
+    // nothing from either page, two empty lists compare equal, and this passes
+    // while proving nothing. Verified by doing exactly that.
+    const ranking = names(await a.text())
+    expect(ranking).toHaveLength(3)
+    expect(names(await b.text())).toEqual(ranking)
   })
 
   // No validation layer exists, so every one of these must render rather than
