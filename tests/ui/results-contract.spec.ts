@@ -90,6 +90,13 @@ test.describe('wizard conforms to the /results contract', () => {
 
     // And on the wire it is the percent-encoded comma the contract names.
     expect(url.search).toContain('splurges=hotel%2Cfood')
+
+    // AUDITED, and left as it is deliberately. not.toContain() is a negative
+    // assertion, so an empty url.search would satisfy it by absence -- the
+    // failure mode that let an api spec pass while every response was a 500.
+    // Here the toContain() directly above already proves url.search is
+    // non-empty, so this line cannot pass vacuously. Do not move it above that
+    // assertion, and do not delete that assertion.
     expect(url.search).not.toContain('splurges=hotel&')
 
     // The other four must survive the multi-select step unchanged.
