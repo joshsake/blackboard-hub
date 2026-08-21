@@ -41,7 +41,8 @@ const MUTATIONS = [
     find: '  const [answers, setAnswers] = useState<Record<string, string | string[]>>({\n    splurges: [],\n  });',
     replace: '  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});',
     expect: 'a completed wizard emits all five params, including an empty splurges',
-    why: 'The seed is the only reason an unpicked splurges is emitted at all. Deleting it looks like tidy-up, still returns 200, and leaves the api suite fully green -- only a browser can see the param vanish.'
+    alsoApi: true,
+    why: 'The seed is the only reason an unpicked splurges is emitted at all. Deleting it looks like tidy-up, still returns 200, and leaves the api suite fully green -- only a browser can see the param vanish. The api-suite-green half is the load-bearing claim of the advisory, so this mutation runs BOTH suites against one mutated tree.'
   },
   {
     id: 'M2-splurges-repeated',
@@ -127,41 +128,94 @@ async function assertServingOurBuild () {
   return id
 }
 
-function runSuite () {
+/** Run one Playwright project against the server we control and return which
+ *  specs passed and which failed, BY TITLE.
+ *
+ *  The JSON reporter rather than scraping the list reporter: a mutation pass is
+ *  only as trustworthy as its ability to say WHICH spec went red, and a regex
+ *  over human-readable output is the wrong place to be approximately right. */
+function runSuite (project) {
+  const cmd = `npx playwright test --project=${project} --reporter=json`
+  let stdout
   try {
-    execSync('npm run test:ui', {
+    stdout = execSync(cmd, {
       cwd: SUITE, encoding: 'utf8', env: { ...process.env, BASE_URL: BASE }, stdio: ['ignore', 'pipe', 'pipe']
     })
-    return []
   } catch (e) {
-    const out = `${e.stdout || ''}${e.stderr || ''}`
-    return [...out.matchAll(/^\s*(?:not ok|x)\s*\d*\s*\[ui\][^>]*>[^>]*>\s*(.+?)(?:\s*\(\d+ms\))?\s*$/gm)].map(m => m[1].trim())
+    stdout = e.stdout || ''
   }
+  const start = stdout.indexOf('{')
+  if (start < 0) throw new Error(`${project}: no JSON report produced -- refusing to guess which specs ran`)
+  const report = JSON.parse(stdout.slice(start))
+
+  const passed = []
+  const failed = []
+  const walk = (node) => {
+    for (const spec of node.specs || []) {
+      (spec.ok ? passed : failed).push(spec.title)
+    }
+    for (const child of node.suites || []) walk(child)
+  }
+  for (const s of report.suites || []) walk(s)
+  if (!passed.length && !failed.length) throw new Error(`${project}: the report contains no specs -- a run that executed nothing must not be recorded as a result`)
+  return { passed, failed }
 }
 
 async function once (label, mutation) {
+  const record = { label, anchorApplied: mutation ? false : null, build: null, ui: null, api: null, reverted: null }
+
   if (mutation) {
     const src = readFileSync(mutation.file, 'utf8')
     const re = anchorRe(mutation.find)
     if (!re.test(src)) {
       throw new Error(`${mutation.id}: anchor text not found in ${mutation.file} -- the app changed under this harness, so fix the mutation rather than reporting a result`)
     }
-    writeFileSync(mutation.file, src.replace(re, mutation.replace), 'utf8')
+    const next = src.replace(re, mutation.replace)
+    writeFileSync(mutation.file, next, 'utf8')
+    // Applied means the file actually changed, not that a replace was called.
+    record.anchorApplied = next !== src
+    if (!record.anchorApplied) throw new Error(`${mutation.id}: replacement left the file byte-identical -- nothing was mutated`)
   }
+
   let started = false
   try {
     sh('npm run build', APP)
     await serve()
     started = true
-    const build = await assertServingOurBuild()
-    const failed = runSuite()
-    console.log(`${label.padEnd(20)} build=${build} failed=${failed.length ? failed.join(' | ') : '(none)'}`)
-    return failed
+    record.build = await assertServingOurBuild()
+    record.ui = runSuite('ui')
+    // M1 carries the api half: the seed deletion must leave the api suite
+    // fully green, because that is the whole point -- the param vanishes at the
+    // browser while every /results URL stays legal at the HTTP layer.
+    if (mutation?.alsoApi) record.api = runSuite('api')
   } finally {
     if (started) {
       try { sh(`npx --yes kill-port ${PORT}`, APP) } catch { /* port already free */ }
     }
-    if (mutation) sh('git checkout -- .', APP)
+    if (mutation) {
+      sh('git checkout -- .', APP)
+      record.reverted = clean()
+    }
+  }
+  return record
+}
+
+/** Report shape per tests/docs/mutation-evidence-protocol.md: for every run,
+ *  anchor applied, build identity, red list, green list, revert verified. */
+function report (r, expect) {
+  console.log(`\n=== ${r.label} ===`)
+  if (r.anchorApplied !== null) console.log(`  anchor applied : ${r.anchorApplied}`)
+  console.log(`  BUILD_ID probe : ${r.build} (200 -- server is serving this build)`)
+  console.log(`  ui red         : ${r.ui.failed.length ? r.ui.failed.join(' | ') : '(none)'}`)
+  console.log(`  ui green       : ${r.ui.passed.length ? r.ui.passed.join(' | ') : '(none)'}`)
+  if (r.api) {
+    console.log(`  api red        : ${r.api.failed.length ? r.api.failed.join(' | ') : '(none)'}`)
+    console.log(`  api green      : ${r.api.passed.length} spec(s)`)
+  }
+  if (r.reverted !== null) console.log(`  revert verified: ${r.reverted}`)
+  if (expect) {
+    const hit = r.ui.failed.some(f => f.includes(expect))
+    console.log(`  VERDICT        : ${hit ? 'CAUGHT' : 'BLIND -- the targeted spec did not fail'}`)
   }
 }
 
@@ -170,27 +224,32 @@ const main = async () => {
   if (await get('/plan') === 200) throw new Error(`something is already listening on ${PORT} -- refusing to start`)
 
   const baseline = await once('BASELINE', null)
-  if (baseline.length) {
-    throw new Error(`baseline is not green (${baseline.join(', ')}) -- a mutation pass on a red baseline proves nothing`)
+  report(baseline, null)
+  if (baseline.ui.failed.length) {
+    throw new Error(`baseline is not green (${baseline.ui.failed.join(', ')}) -- a mutation pass on a red baseline proves nothing`)
   }
 
   const results = []
   for (const m of MUTATIONS) {
-    const failed = await once(m.id, m)
+    const r = await once(m.id, m)
+    report(r, m.expect)
     results.push({
       id: m.id,
-      hit: failed.some(f => f.includes(m.expect)),
-      collateral: failed.filter(f => !f.includes(m.expect))
+      hit: r.ui.failed.some(f => f.includes(m.expect)),
+      collateral: r.ui.failed.filter(f => !f.includes(m.expect)),
+      apiGreen: r.api ? r.api.failed.length === 0 : null,
+      reverted: r.reverted
     })
   }
 
-  console.log('\n--- VERDICT ---')
+  console.log('\n--- SUMMARY ---')
   for (const r of results) {
     const extra = r.collateral.length ? `  (also red: ${r.collateral.join(' | ')})` : ''
-    console.log(`${r.id.padEnd(20)} ${r.hit ? 'CAUGHT' : 'BLIND -- the spec did not fail'}${extra}`)
+    const api = r.apiGreen === null ? '' : `  api-suite=${r.apiGreen ? 'GREEN' : 'RED -- the claim this mutation exists to prove has failed'}`
+    console.log(`${r.id.padEnd(20)} ${r.hit ? 'CAUGHT' : 'BLIND'}${api}${extra}`)
   }
   if (!clean()) console.log(`\nWARNING: ${APP} left dirty -- restore it before reporting anything`)
-  process.exitCode = results.every(r => r.hit) ? 0 : 1
+  process.exitCode = results.every(r => r.hit && r.reverted && r.apiGreen !== false) ? 0 : 1
 }
 
 main().catch(e => {
