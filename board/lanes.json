@@ -1,5 +1,5 @@
 {
-  "_comment": "Stable lane identity. Session IDs are deliberately absent -- they change whenever a session restarts. The hub resolves a lane to a live session at dispatch time from list_sessions, matching cwd against worktree first, then branch, and only falling back to sessionTitle (auto-generated titles drift, so routing must never depend on one). worktree is the checkout a lane session works in and where its git state is read from; dir is where that lane code lives inside it.",
+  "_comment": "Stable lane identity. Session IDs are deliberately absent -- they change whenever a session restarts. The hub resolves a lane to a live session at dispatch time from list_sessions, matching cwd against worktree first, then branch, and only falling back to sessionTitle (auto-generated titles drift, so routing must never depend on one). worktree is the checkout a lane session works in and where its git state is read from; dir is where that lane code lives inside it. Relative paths (worktree, appWorktree) resolve against the hub repo root, never against the invoking checkout.",
   "lanes": {
     "hub": {
       "role": "Control. Receives intent, routes to lanes, arbitrates questions.",
@@ -14,7 +14,7 @@
       "sessionTitle": "API Lane",
       "branch": "lane/api",
       "port": 3101,
-      "appWorktree": "C:/automation/wayfarer-lanes/api"
+      "appWorktree": "../wayfarer-lanes/api"
     },
     "ui": {
       "role": "Playwright browser tests, selectors, page objects.",
@@ -23,7 +23,7 @@
       "sessionTitle": "UI Lane",
       "branch": "lane/ui",
       "port": 3102,
-      "appWorktree": "C:/automation/wayfarer-lanes/ui"
+      "appWorktree": "../wayfarer-lanes/ui"
     },
     "load": {
       "role": "k6 load and performance tests, thresholds, scenarios.",
@@ -32,7 +32,7 @@
       "sessionTitle": "Load Lane",
       "branch": "lane/load",
       "port": 3103,
-      "appWorktree": "C:/automation/wayfarer-lanes/load"
+      "appWorktree": "../wayfarer-lanes/load"
     },
     "docs": {
       "role": "Documentation, PR bodies, result write-ups.",
