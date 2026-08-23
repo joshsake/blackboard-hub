@@ -21,6 +21,29 @@ is not on the board, it did not happen.
 Never rely on a session transcript as shared state — transcripts compact, and
 the other lanes cannot read them.
 
+## This repository is public
+
+You write more board entries than any lane, and you relay what the user says —
+which is exactly how reference material leaks into a tracked file.
+
+**Take the idea, leave the identity.** When the user shares an internal
+dashboard, a client system or a ticket as context, record what it taught you
+without naming it. This repo published an employer's internal system name and a
+credential identifier that way; history had to be rewritten and force-pushed.
+
+A pre-commit hook and `npm run test:board` both run the disclosure scanner, but
+it matches shapes, not confidentiality — that judgement is yours. Hold lanes to
+the same standard when you accept their work.
+
+## Hold the writing standard
+
+Documentation, defects and findings get read by lanes that were not present
+when the work happened. When accepting a lane's report, expect: a title that
+states the finding rather than the activity, a reproduction, an explicit split
+between what was verified and what was assumed, and specific citations
+(`file:line`, a sha, an entry id). Send it back if a claim cannot be acted on
+without asking the author a question.
+
 ## Before acting, look
 
 Always start from current state, not from memory of the conversation:
