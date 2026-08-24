@@ -75,9 +75,10 @@ Run the suites — Playwright builds and serves the app under test itself, so
 there is no "start the app first" step:
 
 ```bash
-npm run test:api     # Playwright, HTTP surface only, no browser
-npm run test:ui      # Playwright, browser
-npm run test:load    # k6 (needs a running instance)
+npm run test:api        # Playwright, HTTP surface only, no browser
+npm run test:ui         # Playwright, browser
+npm run test:load       # k6 baseline; needs BASE_URL, SKIPS (exit 0) without one
+npm run test:load:smoke # k6 smoke: 1 VU, seconds, prerendered routes only
 ```
 
 ---

@@ -11,7 +11,8 @@
     "test:api:jest": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.mjs",
     "test:api:all": "npm run test:api:jest && npm run test:api",
     "test:ui": "playwright test --project=ui",
-    "test:load": "k6 run tests/load/baseline.js"
+    "test:load": "node tests/load/preflight.mjs baseline",
+    "test:load:smoke": "node tests/load/preflight.mjs smoke"
   },
   "devDependencies": {
     "@jest/globals": "^29.7.0",
