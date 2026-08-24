@@ -1,0 +1,9 @@
+{
+  "name": "wayfarer",
+  "appDir": "../wayfarer",
+  "deployedUrl": "https://wayfarer-xi.vercel.app",
+  "localUrl": "http://localhost:3000",
+  "start": { "command": "npm run build && npm run start", "timeoutMs": 180000 },
+  "healthRoute": "/results?splurges=&party=solo&vibe=mix&transit=car&detail=essentials",
+  "notes": "results backend (destinations db) can pause; while it is down every /results shape returns 500 by design (blocker_a3ba1690). Local build needs the two public config values from the app's .env.example."
+}

@@ -1,48 +1,36 @@
 import { defineConfig, devices } from '@playwright/test'
-import { execSync } from 'node:child_process'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { resolveTarget, specPatterns } from './tests/lib/target.mjs'
 
 // One Playwright install serves both lanes. They are separate *projects*
 // rather than separate configs so the api and ui lane sessions share fixtures
 // and reporters instead of drifting apart.
+//
+// WHICH APP this run tests is no longer decided here: the target registry is
+// (targets/, contract_d350537b), resolved through tests/lib/target.mjs so
+// playwright, jest and the k6 preflight cannot disagree. In short:
+//   TARGET=<name>       pick a registered target (default: targets/config.json)
+//   BASE_URL=<url>      test that URL, start nothing
+//   BASE_URL=deployed   sentinel: the target's own deployedUrl
+//   (neither)           targets with start+appDir build and serve locally --
+//                       unchanged wayfarer behavior; APP_DIR still overrides
+const target = resolveTarget()
 
-const HERE = dirname(fileURLToPath(import.meta.url))
-
-// Lanes run from their own worktrees, so a path relative to this file would
-// resolve differently in each one. Anchor on the main checkout instead --
-// the same trick bin/board.mjs uses to keep one shared board.
-function mainCheckout (): string {
-  try {
-    const common = execSync('git rev-parse --path-format=absolute --git-common-dir', {
-      cwd: HERE, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']
-    }).trim()
-    return common ? dirname(common) : HERE
-  } catch { return HERE }
+// Fallback notes print once from the main process, not from every worker.
+if (target.note && process.env.TEST_WORKER_INDEX === undefined) {
+  console.log(`[target] ${target.note}`)
 }
 
-// The system under test. Override APP_DIR to point the same suite at a
-// different checkout; override BASE_URL to test a deployed environment and
-// skip starting anything locally.
-const APP_DIR = process.env.APP_DIR || resolve(join(mainCheckout(), '..', 'wayfarer'))
-const LOCAL_URL = 'http://localhost:3000'
-const baseURL = process.env.BASE_URL || LOCAL_URL
-
-// Two modes, deliberately:
-//   BASE_URL set  -> test a running/deployed environment, start nothing.
-//   BASE_URL unset -> Playwright builds and serves the app itself, so a run is
-//                     self-contained and needs no "start the app first" step.
-const webServer = process.env.BASE_URL
-  ? undefined
-  : {
-      // The build matters in CI, where the container starts with no .next.
-      // Locally reuseExistingServer skips this entirely when a server is up.
-      command: 'npm run build && npm run start',
-      cwd: APP_DIR,
-      url: LOCAL_URL,
+const webServer = target.webServer
+  ? {
+      // The build matters in CI, where the container starts with no build
+      // output. Locally reuseExistingServer skips this when a server is up.
+      command: target.webServer.command,
+      cwd: target.webServer.cwd,
+      url: target.webServer.url,
       reuseExistingServer: true,
-      timeout: 180_000
+      timeout: target.webServer.timeoutMs
     }
+  : undefined
 
 export default defineConfig({
   // Lane sessions run concurrently, so failures must be attributable.
@@ -51,28 +39,36 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   use: {
-    baseURL,
+    baseURL: target.baseURL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure'
   },
   webServer,
+  // One testDir cannot span the two trees (targets/<name>/<lane> plus the
+  // lane's starter specs under tests/), so testDir is the repo root and each
+  // project selects by pattern. *.spec.ts ONLY, everywhere: the api lane also
+  // runs a Jest layer whose *.test.ts files live in the same directories, and
+  // Playwright's default testMatch would load those and fail on the
+  // @jest/globals imports.
   projects: [
     {
       // API lane: no browser. Playwright's request fixture only.
-      // *.spec.ts ONLY: the api lane also runs a Jest layer whose files are
-      // *.test.ts in the same directory, and Playwright's default testMatch
-      // would try to load those and fail on the @jest/globals imports.
       name: 'api',
-      testDir: './tests/api',
-      testMatch: '**/*.spec.ts',
+      testDir: '.',
+      testMatch: specPatterns('api', target.name),
       use: {}
     },
     {
-      // Same explicit pattern as api: keeps any future *.test.ts (Jest) files
-      // in tests/ui out of Playwright's collector.
       name: 'ui',
-      testDir: './tests/ui',
-      testMatch: '**/*.spec.ts',
+      testDir: '.',
+      testMatch: [
+        ...specPatterns('ui', target.name),
+        // WAVE-1 TRANSITION ONLY: the ui suite still lives in tests/ui until
+        // the ui lane moves it to targets/<name>/ui in wave 2. Both locations
+        // match this wave so nothing breaks between waves; the ui lane drops
+        // this pattern when it moves.
+        'tests/ui/**/*.spec.ts'
+      ],
       use: { ...devices['Desktop Chrome'] }
     }
   ]
