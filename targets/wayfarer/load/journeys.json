@@ -1,0 +1,20 @@
+{
+  "_comment": "wayfarer load journeys -- DATA consumed by the target-agnostic k6 engine under tests/load/ (schema documented in tests/load/lib/config.js). Group names become the k6 `route` tag and per-route threshold keys. budgetMs values are milliseconds.",
+  "target": "wayfarer",
+  "groups": {
+    "static": {
+      "_comment": "prerendered routes: cheap, safe against the public deployment",
+      "paths": ["/", "/plan"],
+      "budgetMs": { "p95": 300, "p99": 800 }
+    },
+    "results": {
+      "_comment": "server-rendered, needs the data backend. Excluded from the smoke set on purpose: while the backend is paused every /results shape returns 500 (blocker_a3ba1690), and load traffic must not hammer an erroring route on the public deployment.",
+      "paths": ["/results?party=couple&vibe=local&splurges=food&detail=essentials"],
+      "budgetMs": { "p95": 800, "p99": 2000 }
+    }
+  },
+  "sets": {
+    "smoke": ["static"],
+    "full": ["static", "results"]
+  }
+}
