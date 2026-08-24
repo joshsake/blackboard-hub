@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, skipUnlessResultsRenders } from './fixtures'
 
 // ui lane — conformance of the WIZARD'S EMITTED URL to contract_1f5a871e.
 //
@@ -15,42 +15,22 @@ import { test, expect, type Page } from '@playwright/test'
 // Neither errors — they just change the ranking. So every assertion here is
 // per-param, and never on whole-query-string equality: /results is
 // order-independent, so pinning the whole string would be brittle for nothing.
+//
+// Driving the wizard lives in PlanPage.complete (tests/ui/pages/plan-page.ts)
+// — line-for-line the completeWizard helper these specs were mutation-verified
+// through (finding_e24f4931). Every spec is health-gated: completion ends in a
+// client-side navigation to /results, and when the data backend is down that
+// navigation never commits — the URL stays on /plan — so even the URL-only
+// specs cannot observe their subject (verified on the deployed target,
+// 2026-08-24). A dead environment reads as blocked, not red.
 
 const ALL_PARAMS = ['party', 'vibe', 'splurges', 'transit', 'detail'] as const
 
-interface Choices {
-  party: string
-  vibe: string
-  splurges: string[]
-  transit: string
-  detail: string
-}
-
-/** Drive the wizard to completion and return the URL it emitted.
- *  Passing no splurges exercises the "keep it lean" path, which the contract
- *  says still emits the key. Single-select steps auto-advance; the one
- *  multi-select step needs the explicit continue button. */
-async function completeWizard (page: Page, choices: Choices): Promise<URL> {
-  await page.goto('/plan')
-
-  await page.getByTestId(`option-${choices.party}`).click()
-  await page.getByTestId(`option-${choices.vibe}`).click()
-
-  for (const splurge of choices.splurges) {
-    await page.getByTestId(`option-${splurge}`).click()
-  }
-  await page.getByTestId('wizard-continue').click()
-
-  await page.getByTestId(`option-${choices.transit}`).click()
-  await page.getByTestId(`option-${choices.detail}`).click()
-
-  await expect(page).toHaveURL(/\/results\?/)
-  return new URL(page.url())
-}
-
 test.describe('wizard conforms to the /results contract', () => {
-  test('a completed wizard emits all five params, including an empty splurges', async ({ page }) => {
-    const url = await completeWizard(page, {
+  test('a completed wizard emits all five params, including an empty splurges', async ({ planPage, resultsHealth }) => {
+    skipUnlessResultsRenders(resultsHealth)
+
+    const url = await planPage.complete({
       party: 'couple',
       vibe: 'local',
       splurges: [],
@@ -74,8 +54,10 @@ test.describe('wizard conforms to the /results contract', () => {
     expect(url.searchParams.get('splurges')).toBe('')
   })
 
-  test('multi-select emits one comma-joined splurges, never the repeated form', async ({ page }) => {
-    const url = await completeWizard(page, {
+  test('multi-select emits one comma-joined splurges, never the repeated form', async ({ planPage, resultsHealth }) => {
+    skipUnlessResultsRenders(resultsHealth)
+
+    const url = await planPage.complete({
       party: 'family',
       vibe: 'classic',
       splurges: ['hotel', 'food'],
@@ -99,8 +81,10 @@ test.describe('wizard conforms to the /results contract', () => {
     expect(url.searchParams.get('detail')).toBe('essentials')
   })
 
-  test('no param is ever emitted twice', async ({ page }) => {
-    const url = await completeWizard(page, {
+  test('no param is ever emitted twice', async ({ planPage, resultsHealth }) => {
+    skipUnlessResultsRenders(resultsHealth)
+
+    const url = await planPage.complete({
       party: 'couple',
       vibe: 'local',
       splurges: ['hotel', 'experiences'],
@@ -120,8 +104,10 @@ test.describe('wizard conforms to the /results contract', () => {
     }
   })
 
-  test('detail=everything expands every card in the browser', async ({ page }) => {
-    await completeWizard(page, {
+  test('detail=everything expands every card in the browser', async ({ planPage, resultsPage, resultsHealth }) => {
+    skipUnlessResultsRenders(resultsHealth)
+
+    await planPage.complete({
       party: 'solo',
       vibe: 'mix',
       splurges: ['experiences'],
@@ -129,21 +115,22 @@ test.describe('wizard conforms to the /results contract', () => {
       detail: 'everything'
     })
 
-    const cards = page.getByTestId('recommendation-card')
-    await expect(cards).toHaveCount(3)
+    await expect(resultsPage.cards).toHaveCount(3)
 
     // "Expanded" has to mean the traveller can actually read the highlights.
     // The open property alone would still pass if the content were hidden
     // some other way, so assert both the state and the visible result.
     for (let i = 0; i < 3; i++) {
-      const details = cards.nth(i).locator('details')
+      const details = resultsPage.detailsOf(i)
       await expect(details).toHaveJSProperty('open', true)
       await expect(details.locator('li').first()).toBeVisible()
     }
   })
 
-  test('detail=essentials leaves every card collapsed', async ({ page }) => {
-    await completeWizard(page, {
+  test('detail=essentials leaves every card collapsed', async ({ planPage, resultsPage, resultsHealth }) => {
+    skipUnlessResultsRenders(resultsHealth)
+
+    await planPage.complete({
       party: 'solo',
       vibe: 'mix',
       splurges: ['experiences'],
@@ -151,13 +138,12 @@ test.describe('wizard conforms to the /results contract', () => {
       detail: 'essentials'
     })
 
-    const cards = page.getByTestId('recommendation-card')
-    await expect(cards).toHaveCount(3)
+    await expect(resultsPage.cards).toHaveCount(3)
 
     // Without this the test above proves nothing: content that is always
     // visible would satisfy it just as well. This is what gives it teeth.
     for (let i = 0; i < 3; i++) {
-      const details = cards.nth(i).locator('details')
+      const details = resultsPage.detailsOf(i)
       await expect(details).toHaveJSProperty('open', false)
       await expect(details.locator('li').first()).not.toBeVisible()
     }
