@@ -86,6 +86,13 @@ When the user states a need:
    node bin/board.mjs registrations --json
    ```
 
+   Registrations carry a `sessionId` when the lane's environment exposed one
+   (the session-id env var, a UUID). Match on it **first, strict equality
+   only** — a `list_sessions` handle shaped `local_*` is a different
+   namespace; never compare those against it. Lanes run as subagents of one
+   hub session can share the hub's own id; fall through to `cwd` for those.
+   When `sessionId` is absent or unmatched:
+
    Compare each session's `cwd`, normalised the same way the CLI normalises
    `cwdKey` — backslashes to forward slashes, case folded, trailing slash
    removed. `list_sessions` reports `C:\...` while the CLI records `C:/...`, so
@@ -98,7 +105,7 @@ When the user states a need:
    a session. Tell the user to run this in that lane's session:
 
    ```bash
-   node C:/automation/blackboard_hub/bin/board.mjs register --lane <name>
+   node /path/to/blackboard_hub/bin/board.mjs register --lane <name>
    ```
 
    Session IDs change on every restart, so never store or reuse one.

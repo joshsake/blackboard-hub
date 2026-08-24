@@ -47,7 +47,7 @@ flowchart TD
     Board -->|inbox| LOAD
     Board -->|inbox| DOCS
 
-    API["api lane<br/>Playwright"] -->|contracts, findings| Board
+    API["api lane<br/>Playwright + Jest"] -->|contracts, findings| Board
     UI["ui lane<br/>Playwright"] -->|findings| Board
     LOAD["load lane<br/>k6"] -->|measurements| Board
     DOCS["docs lane<br/>write-ups"] -->|results| Board
@@ -76,6 +76,8 @@ there is no "start the app first" step:
 
 ```bash
 npm run test:api        # Playwright, HTTP surface only, no browser
+npm run test:api:jest   # Jest, the api lane's no-network layer
+npm run test:api:all    # both api layers, one gate
 npm run test:ui         # Playwright, browser
 npm run test:load       # k6 baseline; needs BASE_URL, SKIPS (exit 0) without one
 npm run test:load:smoke # k6 smoke: 1 VU, seconds, prerendered routes only
@@ -156,6 +158,8 @@ the resolved path; if two lanes disagree, they are isolated.
 ## Board commands
 
 ```
+board register --lane <l> [--worktree <path>]   say where you run; records sessionId when present
+board registrations      who is registered where, sessionId shown per row
 board append --lane <l> --type <t> [--title <s>] [--body <s>] [--id <id>]
              [--status <s>] [--refs a,b] [--to <lane>] [--waiting-on human|<lane>]
 board read   [--type t] [--owner l] [--status s] [--to l] [--waiting-on x] [--json]
@@ -201,8 +205,9 @@ Two skills encode the protocol so a session knows its role:
 ## Tests
 
 ```bash
-npm run test:board     # 22 checks: ownership, fold semantics, fan-out, board sharing
-npx playwright test    # 8 tests against the app under test
+npm run test:board     # 45 checks: ownership, fold semantics, fan-out, registration, board sharing
+npx playwright test    # 24 specs against the app under test
+npm run test:api:jest  # 19 no-network tests: the api lane's URL/contract oracles
 ```
 
 `test/shared-board.sh` exists because the private-board bug was found by hand and

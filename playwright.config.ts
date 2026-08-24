@@ -68,8 +68,11 @@ export default defineConfig({
       use: {}
     },
     {
+      // Same explicit pattern as api: keeps any future *.test.ts (Jest) files
+      // in tests/ui out of Playwright's collector.
       name: 'ui',
       testDir: './tests/ui',
+      testMatch: '**/*.spec.ts',
       use: { ...devices['Desktop Chrome'] }
     }
   ]

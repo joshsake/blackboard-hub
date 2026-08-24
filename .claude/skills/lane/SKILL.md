@@ -69,7 +69,7 @@ The hub cannot route to you until you say where you are. Do this before
 anything else, **run from your own session, by absolute path**:
 
 ```bash
-node C:/automation/blackboard_hub/bin/board.mjs register --lane <you>
+node /path/to/blackboard_hub/bin/board.mjs register --lane <you>
 ```
 
 Re-registering just moves you, so it is safe to run every session.
@@ -89,7 +89,7 @@ Only pass `--worktree` if your work genuinely lives somewhere other than the
 registry says:
 
 ```bash
-node C:/automation/blackboard_hub/bin/board.mjs register --lane <you> --worktree C:/path/to/checkout
+node /path/to/blackboard_hub/bin/board.mjs register --lane <you> --worktree /path/to/checkout
 ```
 
 `--cwd` no longer exists. It let a lane record a directory that was not its
@@ -99,7 +99,7 @@ healthy — the exact failure this split removes.
 Check yourself afterwards:
 
 ```bash
-node C:/automation/blackboard_hub/bin/board.mjs registrations
+node /path/to/blackboard_hub/bin/board.mjs registrations
 ```
 
 If your row is flagged **foreign**, your worktree is not a checkout of the hub
