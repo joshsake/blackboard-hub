@@ -1,48 +1,43 @@
 import { test as base, expect, request as apiRequest } from '@playwright/test'
-import { PlanPage } from './pages/plan-page'
-import { ResultsPage } from './pages/results-page'
+import { resolveTarget } from '../lib/target.mjs'
 
-/** Outcome of the one-per-worker probe of GET /results.
+// SHARED ui-lane core — target-generic by definition. Nothing in this file
+// may know an app: which routes prove health, which blocker explains an
+// outage, all of that lives in the target registry (targets/<name>/target.json,
+// schema in contract_d350537b, resolution in contract_8f9d0915). Per-target
+// suites layer their own page-object fixtures on top of this test object
+// (see targets/wayfarer/ui/fixtures.ts).
+
+const target = resolveTarget()
+const healthRoute = (target.config.healthRoute as string | undefined) ?? '/'
+
+/** Outcome of the one-per-worker probe of the target's healthRoute.
  *  status is null when the request itself failed (network error). */
-export interface ResultsHealth {
+export interface TargetHealth {
   ok: boolean
   status: number | null
 }
 
-interface UiFixtures {
-  planPage: PlanPage
-  resultsPage: ResultsPage
-}
-
 interface UiWorkerFixtures {
-  resultsHealth: ResultsHealth
+  targetHealth: TargetHealth
 }
 
 /** Shared test object for the ui lane. Specs import { test, expect } from
- *  here, never from @playwright/test directly, so page objects and the
- *  health gate stay consistent across the lane. */
-export const test = base.extend<UiFixtures, UiWorkerFixtures>({
-  planPage: async ({ page }, use) => {
-    await use(new PlanPage(page))
-  },
-
-  resultsPage: async ({ page }, use) => {
-    await use(new ResultsPage(page))
-  },
-
-  // Probed once per worker, not per test: the target's health does not change
-  // mid-run, and 6 of 9 specs consult it. Bare GET /results is the right
-  // probe because contract_1f5a871e guarantees it is 200 (all params optional,
-  // defaults applied, no validation layer) — so anything but 200 means the
-  // backend cannot serve the catalog, not that the probe URL was wrong.
-  resultsHealth: [async ({}, use, workerInfo) => {
-    const baseURL = (workerInfo.project.use.baseURL as string | undefined) ||
-      process.env.BASE_URL || 'http://localhost:3000'
+ *  here (directly, or via their target's fixtures file), never from
+ *  @playwright/test, so the health gate stays consistent across targets. */
+export const test = base.extend<{}, UiWorkerFixtures>({
+  // Probed once per worker, not per test: the target's health does not
+  // change mid-run. The route comes from target.json's healthRoute — "one
+  // route that proves the full stack is up" (contract_d350537b) — so a
+  // healthy target answers 200 by its own declaration and anything else
+  // means the environment, not the contract, is broken.
+  targetHealth: [async ({}, use, workerInfo) => {
+    const baseURL = (workerInfo.project.use.baseURL as string | undefined) ?? target.baseURL
 
     let status: number | null = null
     try {
       const ctx = await apiRequest.newContext({ baseURL })
-      const res = await ctx.get('/results', { timeout: 15_000 })
+      const res = await ctx.get(healthRoute, { timeout: 15_000 })
       status = res.status()
       await ctx.dispose()
     } catch {
@@ -53,22 +48,23 @@ export const test = base.extend<UiFixtures, UiWorkerFixtures>({
   }, { scope: 'worker' }]
 })
 
-/** Health gate for specs that need /results to render real HTML.
+/** Health gate for specs that need the target's full stack rendering.
  *
- *  Call it first thing in any spec that (a) reads the recommendation cards,
- *  or (b) completes the wizard — completion client-side-navigates to
- *  /results, and when the data backend is down that navigation never commits:
- *  the URL stays on /plan and even URL-only assertions time out (verified
- *  against the deployed target, 2026-08-24, finding_e732d2db).
+ *  Call it first thing in any spec that a dead backend would otherwise turn
+ *  red: a dead environment must read as BLOCKED, not as a contract
+ *  regression. The skip reason quotes the target's target.json notes line,
+ *  which is where operational truth lives — wayfarer's names
+ *  blocker_a3ba1690 — so skips keep pointing at the right blocker with zero
+ *  code coupling (pattern shared with tests/api/health.ts).
  *
- *  A dead environment must read as BLOCKED, not red: skip carries the blocker
- *  id so the report says who clears it, while a healthy target runs every
- *  spec with nothing weakened. */
-export function skipUnlessResultsRenders (health: ResultsHealth): void {
+ *  Starter specs stay ungated on purpose: they must pass during an outage,
+ *  so a real transport-level regression stays visible behind one. */
+export function skipUnlessTargetHealthy (health: TargetHealth): void {
   test.skip(
     !health.ok,
-    `needs /results HTML, but GET /results returned ${health.status ?? 'no response (network error)'} — ` +
-    'data backend down, blocked by blocker_a3ba1690'
+    `health probe ${healthRoute} got ${health.status ?? 'no response'} — ` +
+    `target "${target.name}" environment is down, not a contract regression` +
+    (target.config.notes ? ` [target notes: ${target.config.notes}]` : '')
   )
 }
 

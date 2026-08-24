@@ -1,7 +1,7 @@
-import { test, expect, skipUnlessResultsRenders } from './fixtures'
+import { test, expect, skipUnlessTargetHealthy } from './fixtures'
 
 // ui lane — browser behaviour of the app under test (wayfarer).
-// Selectors live in the page objects (tests/ui/pages/); they are the
+// Selectors live in the page objects (./pages/); they are the
 // data-testids the app plants deliberately, so nothing here depends on
 // styling or DOM shape and a refactor should not turn this red.
 
@@ -37,8 +37,8 @@ test.describe('preference wizard', () => {
     await expect(planPage.option('couple')).toHaveAttribute('aria-pressed', 'true')
   })
 
-  test('completed flow puts the answers in a shareable URL', async ({ page, planPage, resultsPage, resultsHealth }) => {
-    skipUnlessResultsRenders(resultsHealth)
+  test('completed flow puts the answers in a shareable URL', async ({ page, planPage, resultsPage, targetHealth }) => {
+    skipUnlessTargetHealthy(targetHealth)
 
     await planPage.complete({
       party: 'couple',

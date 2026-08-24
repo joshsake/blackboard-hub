@@ -1,4 +1,4 @@
-import { test, expect, skipUnlessResultsRenders } from './fixtures'
+import { test, expect, skipUnlessTargetHealthy } from './fixtures'
 
 // ui lane — conformance of the WIZARD'S EMITTED URL to contract_1f5a871e.
 //
@@ -16,7 +16,7 @@ import { test, expect, skipUnlessResultsRenders } from './fixtures'
 // per-param, and never on whole-query-string equality: /results is
 // order-independent, so pinning the whole string would be brittle for nothing.
 //
-// Driving the wizard lives in PlanPage.complete (tests/ui/pages/plan-page.ts)
+// Driving the wizard lives in PlanPage.complete (./pages/plan-page.ts)
 // — line-for-line the completeWizard helper these specs were mutation-verified
 // through (finding_e24f4931). Every spec is health-gated: completion ends in a
 // client-side navigation to /results, and when the data backend is down that
@@ -27,8 +27,8 @@ import { test, expect, skipUnlessResultsRenders } from './fixtures'
 const ALL_PARAMS = ['party', 'vibe', 'splurges', 'transit', 'detail'] as const
 
 test.describe('wizard conforms to the /results contract', () => {
-  test('a completed wizard emits all five params, including an empty splurges', async ({ planPage, resultsHealth }) => {
-    skipUnlessResultsRenders(resultsHealth)
+  test('a completed wizard emits all five params, including an empty splurges', async ({ planPage, targetHealth }) => {
+    skipUnlessTargetHealthy(targetHealth)
 
     const url = await planPage.complete({
       party: 'couple',
@@ -54,8 +54,8 @@ test.describe('wizard conforms to the /results contract', () => {
     expect(url.searchParams.get('splurges')).toBe('')
   })
 
-  test('multi-select emits one comma-joined splurges, never the repeated form', async ({ planPage, resultsHealth }) => {
-    skipUnlessResultsRenders(resultsHealth)
+  test('multi-select emits one comma-joined splurges, never the repeated form', async ({ planPage, targetHealth }) => {
+    skipUnlessTargetHealthy(targetHealth)
 
     const url = await planPage.complete({
       party: 'family',
@@ -81,8 +81,8 @@ test.describe('wizard conforms to the /results contract', () => {
     expect(url.searchParams.get('detail')).toBe('essentials')
   })
 
-  test('no param is ever emitted twice', async ({ planPage, resultsHealth }) => {
-    skipUnlessResultsRenders(resultsHealth)
+  test('no param is ever emitted twice', async ({ planPage, targetHealth }) => {
+    skipUnlessTargetHealthy(targetHealth)
 
     const url = await planPage.complete({
       party: 'couple',
@@ -104,8 +104,8 @@ test.describe('wizard conforms to the /results contract', () => {
     }
   })
 
-  test('detail=everything expands every card in the browser', async ({ planPage, resultsPage, resultsHealth }) => {
-    skipUnlessResultsRenders(resultsHealth)
+  test('detail=everything expands every card in the browser', async ({ planPage, resultsPage, targetHealth }) => {
+    skipUnlessTargetHealthy(targetHealth)
 
     await planPage.complete({
       party: 'solo',
@@ -127,8 +127,8 @@ test.describe('wizard conforms to the /results contract', () => {
     }
   })
 
-  test('detail=essentials leaves every card collapsed', async ({ planPage, resultsPage, resultsHealth }) => {
-    skipUnlessResultsRenders(resultsHealth)
+  test('detail=essentials leaves every card collapsed', async ({ planPage, resultsPage, targetHealth }) => {
+    skipUnlessTargetHealthy(targetHealth)
 
     await planPage.complete({
       party: 'solo',

@@ -61,14 +61,7 @@ export default defineConfig({
     {
       name: 'ui',
       testDir: '.',
-      testMatch: [
-        ...specPatterns('ui', target.name),
-        // WAVE-1 TRANSITION ONLY: the ui suite still lives in tests/ui until
-        // the ui lane moves it to targets/<name>/ui in wave 2. Both locations
-        // match this wave so nothing breaks between waves; the ui lane drops
-        // this pattern when it moves.
-        'tests/ui/**/*.spec.ts'
-      ],
+      testMatch: specPatterns('ui', target.name),
       use: { ...devices['Desktop Chrome'] }
     }
   ]

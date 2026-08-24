@@ -62,7 +62,7 @@ export class PlanPage {
    *  NOTE: the final toHaveURL needs /results to actually render. When the
    *  data backend is down the client-side navigation never commits and the
    *  URL stays on /plan (verified against the deployed target, 2026-08-24),
-   *  so every caller must be health-gated with skipUnlessResultsRenders. */
+   *  so every caller must be health-gated with skipUnlessTargetHealthy. */
   async complete (choices: Choices): Promise<URL> {
     await this.goto()
 
