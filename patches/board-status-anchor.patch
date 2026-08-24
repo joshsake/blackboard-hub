@@ -1,0 +1,48 @@
+diff --git a/bin/board.mjs b/bin/board.mjs
+index 0b21e29..0dfcb81 100644
+--- a/bin/board.mjs
++++ b/bin/board.mjs
+@@ -24,9 +24,13 @@ function mainCheckout () {
+     return common ? dirname(common) : ROOT
+   } catch { return ROOT }
+ }
+ 
+-const BOARD = process.env.BLACKBOARD_DIR || join(mainCheckout(), 'board')
++// Every repo-relative path anchors here, not just the board. Resolved once:
++// status derives git state per lane, and this shells out to git.
++const MAIN = mainCheckout()
++
++const BOARD = process.env.BLACKBOARD_DIR || join(MAIN, 'board')
+ const ENTRIES = join(BOARD, 'entries')
+ const REGISTRY = join(BOARD, 'lanes.json')
+ 
+ // Where each lane actually lives, as declared by the lane itself rather than
+@@ -88,9 +92,13 @@ function git (dir, cmd) {
+   } catch { return null }
+ }
+ 
+ function deriveGit (dir, { hubTop } = {}) {
+-  const path = isAbsolute(dir) ? dir : join(ROOT, dir)
++  // Relative to the MAIN checkout, never to ROOT. lanes.json stores worktree
++  // paths relative (".", "../hub-lanes/api"), and ROOT is whichever checkout
++  // invoked the CLI -- so ROOT-relative resolution gives each lane a private,
++  // wrong view of every other lane. Same reason BOARD anchors on MAIN.
++  const path = isAbsolute(dir) ? dir : join(MAIN, dir)
+   if (!existsSync(path)) return { state: 'missing' }
+   if (!git(path, 'rev-parse --git-dir')) return { state: 'not-a-repo' }
+ 
+   // A plain subfolder of the hub checkout has no branch state of its own -- it
+@@ -324,9 +332,12 @@ function cmdQueue (flags) {
+ 
+ function cmdStatus (flags) {
+   const registry = lanes()
+   const entries = fold()
+-  const hubTop = git(ROOT, 'rev-parse --show-toplevel')
++  // The hub's checkout, not the caller's: from a lane worktree ROOT would
++  // report that lane, and the shares-hub-checkout guard below would compare
++  // every lane against the wrong baseline.
++  const hubTop = git(MAIN, 'rev-parse --show-toplevel')
+   const rows = Object.entries(registry).map(([name, meta]) => {
+     const mine = entries.filter(e => e.owner === name)
+     const last = lastActivity(name)
+     const reg = readRegistration(name)

@@ -173,6 +173,24 @@ function cmdRegister (flags) {
   // value other than the real one can only make this lane unreachable.
   const cwd = process.cwd()
 
+  // Session identity (decision finding_f955b30a on question_13188c51). The
+  // harness exports a per-session UUID as CLAUDE_CODE_SESSION_ID; capture it
+  // verbatim when present, omit it SILENTLY when absent -- a cron/CI lane
+  // without a harness must still be able to register.
+  //
+  // Hub match order: sessionId (STRICT equality, and only when both sides
+  // expose one) -> cwdKey -> branch -> recency. Never fuzzy-match this field:
+  // list_sessions handles shaped local_* are a different namespace, not
+  // sessionIds, and must not be compared against it. Even when nothing on the
+  // other side matches, the field makes identical-cwd rows distinguishable to
+  // a human, and gives a router a verifiable question to ask a session
+  // (node -e "console.log(process.env.CLAUDE_CODE_SESSION_ID)").
+  //
+  // CAVEAT: lanes run as subagents of one hub session inherit the parent
+  // environment and can share its UUID; cwd/worktree still disambiguate
+  // those rows.
+  const sessionId = process.env.CLAUDE_CODE_SESSION_ID
+
   // Where this lane's WORK lives. The registry is the normal answer;
   // --worktree covers a lane whose checkout genuinely sits somewhere else.
   const explicit = flags.worktree && flags.worktree !== true
@@ -192,6 +210,9 @@ function cmdRegister (flags) {
     // with backslashes while node reports forward slashes, and case can
     // differ. Separators unified, case folded, trailing slash gone.
     cwdKey: cwdKey(cwd),
+    // Absent key rather than null when the env var is missing: the field's
+    // absence is the honest record that this session never exposed one.
+    ...(sessionId ? { sessionId } : {}),
     branch: git(cwd, 'rev-parse --abbrev-ref HEAD'),
     toplevel: git(cwd, 'rev-parse --show-toplevel'),
     // --- GIT STATE. status derives branch, ahead/behind and dirty from here,
@@ -205,6 +226,7 @@ function cmdRegister (flags) {
   const wt = deriveGit(worktree)
   console.log(`registered ${lane}`)
   console.log(`  session:  ${record.cwd}  (${record.branch ?? 'not a git checkout'})`)
+  if (record.sessionId) console.log(`  session id: ${record.sessionId}`)
   console.log(`  worktree: ${record.worktree}  (${wt.branch ?? wt.state})`)
   if (wt.foreign) {
     console.log('  WARNING: that worktree is not part of the hub repo, so this lane\'s')
@@ -220,6 +242,9 @@ function cmdRegistrations (flags) {
     if (!r.registeredAt) { console.log(`${r.lane.padEnd(7)} UNREGISTERED`); continue }
     console.log(`${r.lane.padEnd(7)} ${r.branch ?? '(no branch)'}`)
     console.log(`        session:  ${r.cwd}`)
+    // Always shown, so identical-cwd rows stay distinguishable at a glance
+    // and a missing id is visible rather than silently unroutable-by-id.
+    console.log(`        session id: ${r.sessionId ?? '(not captured at register)'}`)
     console.log(`        worktree: ${r.worktree ?? '(pre-split registration — re-register)'}`)
     // ago() already returns the phrase "just now", so it cannot take " ago".
     const when = ago(r.registeredAt)

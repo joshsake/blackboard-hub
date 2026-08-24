@@ -59,8 +59,12 @@ export default defineConfig({
   projects: [
     {
       // API lane: no browser. Playwright's request fixture only.
+      // *.spec.ts ONLY: the api lane also runs a Jest layer whose files are
+      // *.test.ts in the same directory, and Playwright's default testMatch
+      // would try to load those and fail on the @jest/globals imports.
       name: 'api',
       testDir: './tests/api',
+      testMatch: '**/*.spec.ts',
       use: {}
     },
     {
