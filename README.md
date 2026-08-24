@@ -2,8 +2,11 @@
 
 **A test framework where every layer is its own agent session, coordinated through shared state instead of through you.**
 
-Playwright for API and UI, k6 for load, each running in its own session, its own
-git worktree, its own branch — reading and writing one shared board.
+Playwright + Jest for API, Playwright for UI, k6 for load, each running in its
+own session, its own git worktree, its own branch — reading and writing one
+shared board. The hub owns no product code: product repos keep their source,
+and the lanes point at **registered targets**, so the same machinery tests any
+project you register.
 
 ---
 
@@ -71,7 +74,7 @@ npm run board -- status    # who is live, who has stalled, per-lane git state
 npm run board -- queue     # what is blocked, and how many lanes each blocker gates
 ```
 
-Run the suites — Playwright builds and serves the app under test itself, so
+Run the suites — the default target builds and serves its app itself, so
 there is no "start the app first" step:
 
 ```bash
@@ -79,9 +82,50 @@ npm run test:api        # Playwright, HTTP surface only, no browser
 npm run test:api:jest   # Jest, the api lane's no-network layer
 npm run test:api:all    # both api layers, one gate
 npm run test:ui         # Playwright, browser
-npm run test:load       # k6 baseline; needs BASE_URL, SKIPS (exit 0) without one
+npm run test:load       # k6 baseline; needs a target, SKIPS (exit 0) without one
 npm run test:load:smoke # k6 smoke: 1 VU, seconds, prerendered routes only
+
+TARGET=example npm run test:api     # same lanes, a different registered target
+BASE_URL=deployed npm run test:ui   # sentinel: the target's own deployed URL
 ```
+
+---
+
+## Portable by design — targets
+
+The hub owns **no product code**. Product repos own their source and their
+history; the hub owns the lanes, the board, and the discipline — and points
+them at **registered targets**:
+
+```
+targets/config.json            { "default": "wayfarer" }
+targets/<name>/target.json     how to reach one project: source repo, local
+                               checkout, deployed URL, start command, health route
+targets/<name>/{api,ui,load}/  that project's specs, page objects, journeys
+tests/{api,ui,load}/           target-agnostic: shared libs, the load engine, and
+                               starter specs generic enough to pass on ANY target
+```
+
+One env var selects the project, resolved identically by Playwright, Jest and
+the k6 preflight through `tests/lib/target.mjs` — the three runners cannot
+disagree about what they are testing:
+
+```bash
+npm run test:api                    # the default target
+TARGET=example npm run test:api     # another registered target, same lanes
+BASE_URL=deployed npm run test:ui   # the target's own deployed URL, start nothing
+BASE_URL=https://staging.example.dev npm run test:api   # any URL, start nothing
+```
+
+Adding a project is three steps — **describe it** (`targets/<name>/target.json`),
+**select it** (`TARGET=<name>`), **prove it** (the starter specs pass unedited).
+The `example` target is the permanent proof that pointing somewhere new works
+with zero app knowledge. Schema and walkthrough: [targets/README.md](targets/README.md).
+
+wayfarer is the first registered target, not a special one. Its specs live under
+`targets/wayfarer/`, not in its product repo, because this hub plays the external
+QA org: it asserts published contracts from the outside, and `contract` entries
+on the board only mean something across an ownership boundary.
 
 ---
 
@@ -202,13 +246,36 @@ Two skills encode the protocol so a session knows its role:
 
 ---
 
+## Start your own hub
+
+This repo is a GitHub template. To run the same machinery against your own
+projects:
+
+1. **Use this template** on GitHub, or
+   `gh repo create my-hub --template joshsake/blackboard-hub`.
+2. `node bin/init-hub.mjs` shows what a reset removes — this engagement's board
+   history and its targets. `--force` applies it.
+3. Describe your first target under `targets/`, create the lane worktrees,
+   open one session per lane, and `board register` each from its own session.
+
+You keep the machinery: the board CLI and its test suite, the hub and lane
+skills, the disclosure scanner and pre-commit hook, the writing-standard
+templates, the starter specs, and the load engine. You replace the engagement:
+the targets, and the board history you accrete yourself.
+
+---
+
 ## Tests
 
 ```bash
-npm run test:board     # 45 checks: ownership, fold semantics, fan-out, registration, board sharing
-npx playwright test    # 24 specs against the app under test
+npm run test:board     # 55 checks: ownership, fold semantics, fan-out, registration, board sharing, init-hub
+npx playwright test    # 27 specs against the default target (24 wayfarer + 3 starter)
 npm run test:api:jest  # 19 no-network tests: the api lane's URL/contract oracles
 ```
+
+Starter specs (3 of the 27) are target-generic and run for every registered
+target; the rest live under `targets/wayfarer/` and run only when wayfarer is
+the selected target.
 
 `test/shared-board.sh` exists because the private-board bug was found by hand and
 nothing in the suite would have caught it. It also names any lane running a stale

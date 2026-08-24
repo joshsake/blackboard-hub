@@ -10,21 +10,21 @@
     "api": {
       "role": "Playwright API tests and the contracts they assert against.",
       "worktree": "../hub-lanes/api",
-      "dir": "tests/api",
+      "dir": "tests/api and targets/*/api",
       "sessionTitle": "API Lane",
       "branch": "lane/api"
     },
     "ui": {
       "role": "Playwright browser tests, selectors, page objects.",
       "worktree": "../hub-lanes/ui",
-      "dir": "tests/ui",
+      "dir": "tests/ui and targets/*/ui",
       "sessionTitle": "UI Lane",
       "branch": "lane/ui"
     },
     "load": {
       "role": "k6 load and performance tests, thresholds, scenarios.",
       "worktree": "../hub-lanes/load",
-      "dir": "tests/load",
+      "dir": "tests/load and targets/*/load",
       "sessionTitle": "Load Lane",
       "branch": "lane/load"
     },
