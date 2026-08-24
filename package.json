@@ -8,10 +8,16 @@
     "board": "node bin/board.mjs",
     "test:board": "node bin/scan-secrets.mjs && bash test/smoke.sh && bash test/queue.sh && bash test/register.sh && bash test/shared-board.sh",
     "test:api": "playwright test --project=api",
+    "test:api:jest": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.mjs",
+    "test:api:all": "npm run test:api:jest && npm run test:api",
     "test:ui": "playwright test --project=ui",
     "test:load": "k6 run tests/load/baseline.js"
   },
   "devDependencies": {
-    "@playwright/test": "^1.47.0"
+    "@jest/globals": "^29.7.0",
+    "@playwright/test": "^1.47.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.4.12",
+    "typescript": "^5.9.3"
   }
 }
