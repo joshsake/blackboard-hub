@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test'
-import { gateOnResultsHealth } from './health'
+import { gateOnTargetHealth } from '../../../tests/api/health'
 
 // api lane — HTTP surface of the app under test (wayfarer).
 // No browser: Playwright's request fixture only, so this lane stays fast and
 // runs in a container without browser binaries.
 //
 // Anything asserting the live /results contract sits in a describe that calls
-// gateOnResultsHealth(): /results depends on the destinations backend, and
+// gateOnTargetHealth(): /results depends on the destinations backend, and
 // while that is down every shape returns 500 by design (finding_98889256).
 // Those specs skip citing blocker_a3ba1690 rather than fail. The static
 // surface (/, /plan, 404) stays ungated on purpose — it renders fine during
@@ -30,7 +30,7 @@ test.describe('routes', () => {
   })
 
   test.describe('results (needs the data backend)', () => {
-    gateOnResultsHealth()
+    gateOnTargetHealth()
 
     test('results renders from query params alone', async ({ request }) => {
       // Results is the one dynamic route: the answers live in the URL, which
@@ -46,7 +46,7 @@ test.describe('routes', () => {
 // the HTTP surface: no browser is needed to prove them, and the ui lane
 // should be able to trust them without rediscovering them through the wizard.
 test.describe('results shareable URL (contract_1f5a871e)', () => {
-  gateOnResultsHealth()
+  gateOnTargetHealth()
 
   const FULL = '/results?splurges=hotel%2Cfood&party=couple&vibe=local&transit=clean-transit&detail=essentials'
 

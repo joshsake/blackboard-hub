@@ -1,0 +1,4 @@
+{
+  "_comment": "Which target a run is about when TARGET is unset. Resolution lives in tests/lib/target.mjs (API published as a board contract); descriptor schema in the design contract entry.",
+  "default": "wayfarer"
+}

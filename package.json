@@ -6,7 +6,7 @@
   "description": "Blackboard coordination hub and the test framework its lanes drive.",
   "scripts": {
     "board": "node bin/board.mjs",
-    "test:board": "node bin/scan-secrets.mjs && bash test/smoke.sh && bash test/queue.sh && bash test/register.sh && bash test/shared-board.sh",
+    "test:board": "node bin/scan-secrets.mjs && bash test/smoke.sh && bash test/queue.sh && bash test/register.sh && bash test/shared-board.sh && bash test/init-hub.sh",
     "test:api": "playwright test --project=api",
     "test:api:jest": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.mjs",
     "test:api:all": "npm run test:api:jest && npm run test:api",

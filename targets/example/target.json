@@ -1,0 +1,6 @@
+{
+  "name": "example",
+  "deployedUrl": "https://example.com",
+  "healthRoute": "/",
+  "notes": "proof target: zero app knowledge, no start command, starter specs only. Exists so target switching can be demonstrated on any machine."
+}

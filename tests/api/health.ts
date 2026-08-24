@@ -1,26 +1,32 @@
 import { request, test } from '@playwright/test'
+import { resolveTarget } from '../lib/target.mjs'
 
-// finding_98889256: the deployed target can violate contract_1f5a871e for
-// INFRASTRUCTURE reasons — while the destinations backend is down, every
-// /results shape returns 500 by design (the render throws; there is no static
-// fallback). That is an environment outage, not a contract regression, and
-// the two must not be confusable in a test report: a dead environment reads
-// as SKIPPED with the blocker named, never as red.
+// Target-generic health gate (pattern set by finding_98889256): a target can
+// violate its own contract for INFRASTRUCTURE reasons — wayfarer's /results
+// returns 500 for every shape while its data backend is paused — and that
+// must never be confusable with a contract regression in a test report. A
+// dead environment reads as SKIPPED with the cause named, never as red.
 //
-// So specs that assert the live /results contract call gateOnResultsHealth()
-// inside their describe. One probe per worker, memoised; anything but a 200
-// skips the gated specs with a reason citing blocker_a3ba1690. The rest of
-// the surface (/, /plan, the 404 page) stays ungated — it renders fine even
-// while the data backend is down, and losing that signal would hide real
-// regressions behind the blocker.
+// The probe route comes from the target registry: target.json's healthRoute
+// is "one route that proves the full stack is up" (contract_d350537b), and
+// the skip reason carries the target's notes line, which is where operational
+// truth like a blocker id lives (wayfarer's names blocker_a3ba1690).
+//
+// Specs that assert a live contract call gateOnTargetHealth() inside their
+// describe. One probe per worker, memoised; anything but 200 skips the block.
+// Starter specs and static-surface specs stay ungated on purpose — they pass
+// during an outage, and gating them would hide real regressions behind it.
+
+const target = resolveTarget()
+const route = target.config.healthRoute ?? '/'
 
 let probe: Promise<number | null> | undefined
 
-function resultsStatus (baseURL: string): Promise<number | null> {
+function healthStatus (baseURL: string): Promise<number | null> {
   probe ??= (async () => {
     const ctx = await request.newContext({ baseURL })
     try {
-      return (await ctx.get('/results', { timeout: 15_000 })).status()
+      return (await ctx.get(route, { timeout: 15_000 })).status()
     } catch {
       return null // unreachable: DNS, refused, timeout
     } finally {
@@ -31,16 +37,17 @@ function resultsStatus (baseURL: string): Promise<number | null> {
 }
 
 /**
- * Call once inside a describe block: health-probes /results before the first
- * test and skips every test in the block while it is down.
+ * Call once inside a describe block: health-probes the target's healthRoute
+ * before the first test and skips every test in the block while it is down.
  */
-export function gateOnResultsHealth (): void {
+export function gateOnTargetHealth (): void {
   test.beforeEach(async ({ baseURL }) => {
-    const status = await resultsStatus(baseURL ?? 'http://localhost:3000')
+    const status = await healthStatus(baseURL ?? target.baseURL)
     test.skip(
       status !== 200,
-      `/results health probe got ${status ?? 'no response'} — environment down ` +
-      '(blocker_a3ba1690, destinations backend), not a contract regression'
+      `health probe ${route} got ${status ?? 'no response'} — target "${target.name}" ` +
+      `environment is down, not a contract regression` +
+      (target.config.notes ? ` [target notes: ${target.config.notes}]` : '')
     )
   })
 }
