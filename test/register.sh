@@ -111,5 +111,32 @@ let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{
 })')
 check "other lanes stay unregistered" "$still" "unregistered"
 
+# Session identity (decision finding_f955b30a). The harness exports a
+# per-session UUID; register must capture it verbatim when present and omit
+# the field silently when absent -- and never fail either way. The hub matches
+# it by STRICT equality first, so a mangled or invented value is worse than
+# none at all.
+SID="3f2504e0-4f89-41d3-9a0c-0305e82c3301"
+CLAUDE_CODE_SESSION_ID="$SID" b register --lane api >/dev/null
+recorded=$(b registrations --json | node -e '
+let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{
+  const r=JSON.parse(d).find(x=>x.lane==="api");
+  console.log(r.sessionId ?? "absent");
+})')
+check "sessionId is captured verbatim from the environment" "$recorded" "$SID"
+
+shown=$(b registrations | grep -c "session id: $SID" || true)
+check "registrations displays the session id on the row" "$shown" "1"
+
+# The test harness itself may run inside a session that exposes the var, so
+# absence has to be forced, not assumed.
+env -u CLAUDE_CODE_SESSION_ID node bin/board.mjs register --lane api >/dev/null
+absent=$(b registrations --json | node -e '
+let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{
+  const r=JSON.parse(d).find(x=>x.lane==="api");
+  console.log("sessionId" in r ? "present" : "absent");
+})')
+check "no env var registers fine and omits the field silently" "$absent" "absent"
+
 echo
 [ "$fail" -eq 0 ] && echo "all checks passed" || { echo "FAILURES"; exit 1; }
