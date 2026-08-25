@@ -141,6 +141,20 @@ node bin/board.mjs append --lane <you> --id task_1a2b3c4d --type task --status d
 Updates are partial: passing `--status` alone preserves title, body, refs and
 routing. You never need to retype an entry to change its state.
 
+## Who tests a claim
+
+The lane that can verify a claim most directly owns its spec: api owns what
+HTTP can prove, ui owns what needs a browser, load owns what needs sustained
+traffic. Any other lane that needs the fact consumes the contract entry or
+asks a question — it does not write its own spec for it.
+
+Asserting the same contract clause at different layers is defense in depth
+and welcome; asserting the same claim at the same layer twice is waste.
+Deliberate double-coverage cites the contract it double-covers, so the audit
+can tell it from rediscovery. The docs lane runs the neutral traceability
+audit across all lanes — cite contract ids in your specs so the matrix stays
+greppable.
+
 ## When you need something from another lane
 
 Ask on the board, addressed to them. You may also `send_message` their session

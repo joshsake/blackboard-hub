@@ -138,6 +138,12 @@ Verify a lane's claims before acting on them. A lane reporting "15 specs green"
 or "the patch applies clean" is reporting, not proving — run it. Lanes have
 been right so far; that is a reason to keep checking, not to stop.
 
+Coverage collisions are ruled, not policed: the lane closest to a surface owns
+its specs, and findings that rediscover a published contract instead of citing
+it get sent back. Do not diff spec inventories across lanes yourself — the
+docs lane runs the neutral traceability audit and brings you what needs a
+ruling.
+
 ## The human queue
 
 `blocker` entries with `waiting-on human` are things only the user can resolve.

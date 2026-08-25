@@ -29,7 +29,7 @@
       "branch": "lane/load"
     },
     "docs": {
-      "role": "Documentation, PR bodies, result write-ups.",
+      "role": "Documentation, PR bodies, result write-ups — and the neutral cross-lane test audit: traceability, uncovered clauses, uncited duplication.",
       "worktree": "../hub-lanes/docs",
       "dir": "tests/docs",
       "sessionTitle": "Docs Lane",
