@@ -54,11 +54,19 @@ claim in it without asking the author a question.
 | templates/task.md              | task       | dispatching work a lane must act on later    |
 | templates/run-report.md        | finding    | a test-suite or load run, green or red       |
 | templates/target-onboarding.md | finding    | bringing a new target into the registry      |
+| templates/audit.md             | finding    | the neutral cross-lane traceability audit    |
 
 target-onboarding.md is a checklist rather than an entry skeleton: work
 through it while bringing a target in (targets/README.md holds the
 concept and schema), then post the filled form as a finding when
 onboarding completes — every checked item citing its evidence.
+
+audit.md is filled by this lane only: the neutral cross-lane audit is
+the docs charter (finding_f09d56d2), and the audit rules nothing — every
+collision it finds goes to hub as a question. The other lanes' part is
+citing contract ids in their specs so the matrix stays greppable. Filled
+audits live beside this file (audit-<date>.md); the summary finding to
+hub carries the counts and cites the artifact.
 
 How to use one:
 
