@@ -126,6 +126,10 @@ another lane would need, not a summary of your activity:
 ```bash
 # A guarantee others can build against. Publish these generously --
 # an untold contract is why the ui lane asserts against the wrong shape.
+# Product-facing contracts carry a VALIDATION STATUS section: each clause
+# validated-intent, defect-documented (with the upstream ref), or unjudged.
+# Harness contracts are exempt -- authored behavior is intent by construction.
+# The audit sweeps unjudged clauses as validation debt.
 node bin/board.mjs append --lane <you> --type contract \
   --title "POST /checkout returns 201 with {orderId, total}" \
   --body "409 when the cart is empty. orderId is stable across retries."

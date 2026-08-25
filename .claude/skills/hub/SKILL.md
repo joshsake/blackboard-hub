@@ -142,7 +142,9 @@ Coverage collisions are ruled, not policed: the lane closest to a surface owns
 its specs, and findings that rediscover a published contract instead of citing
 it get sent back. Do not diff spec inventories across lanes yourself — the
 docs lane runs the neutral traceability audit and brings you what needs a
-ruling.
+ruling, including validation debt: product-contract clauses that record
+observed behavior no human has ruled intended. An unvalidated claim is a
+blocked decision — surface aging ones to the user like blockers.
 
 ## The human queue
 
