@@ -160,6 +160,28 @@ lane. Hand-maintained facts rot silently; `git status` does not.
 
 ---
 
+## Verified to fail
+
+A green spec proves nothing until you have watched it go red. Before a spec
+counts as coverage, the lane that wrote it breaks the thing the spec claims to
+guard — mutates the source, runs the spec, sees it fail, reverts — and records
+the mutation and the result in the finding. Agent-written suites that pass
+while asserting nothing are the failure mode this rule exists to catch.
+
+The finding template keeps the two kinds of claim apart: everything is filed
+under **VERIFIED** (with the method — "mutated the source, watched the spec go
+red, reverted") or **ASSUMED / READ, NOT EXECUTED**. A reader never has to
+guess which kind they are holding.
+
+The first application is on the board as `finding_e24f4931`: five contract
+specs against the wayfarer wizard, each shown red against a deliberately broken
+`finish()` or `open` before it was accepted. The page object those
+verifications ran through says so in a comment, and changing it means
+re-verifying. See [tests/docs/templates/finding.md](tests/docs/templates/finding.md)
+and [targets/wayfarer/ui/README.md](targets/wayfarer/ui/README.md#assertion-discipline).
+
+---
+
 ## The human is a resource with a queue
 
 The most valuable thing on the board is usually what is stuck on *you* — and one
