@@ -173,11 +173,23 @@ under **VERIFIED** (with the method — "mutated the source, watched the spec go
 red, reverted") or **ASSUMED / READ, NOT EXECUTED**. A reader never has to
 guess which kind they are holding.
 
-The first application is on the board as `finding_e24f4931`: five contract
-specs against the wayfarer wizard, each shown red against a deliberately broken
-`finish()` or `open` before it was accepted. The page object those
-verifications ran through says so in a comment, and changing it means
-re-verifying. See [tests/docs/templates/finding.md](tests/docs/templates/finding.md)
+The first application shows why the method has to be strict. `finding_e24f4931`
+reported five contract specs against the wayfarer wizard, each shown red against
+a deliberately broken `finish()` or `open`. The same day, the api lane found
+that `reuseExistingServer` can hand the next run the previous mutation's build,
+which produces a plausible red for the wrong reason (`finding_d56fb593`). The ui
+lane could not show its original pass had avoided that, so it withdrew the claim
+(`finding_f1a2c221`) and re-ran every mutation in its own app checkout,
+confirming the live server's build id before each run: six of six caught
+(`finding_b234cb94`, at `hub 647a8a1`). That record is on the
+[`archive/2026-08-21/main`](https://github.com/joshsake/blackboard-hub/tree/archive/2026-08-21/main)
+branch; `finding_ee7a722b` explains how to read it.
+
+The specs on `main` were refactored after that re-run and lack two guards it
+relied on: an existence check before the collapsed-card assertion, and a
+non-empty check before the api ranking comparisons. Until `task_47f5138f` and
+`task_5767977b` restore and re-verify them, the verification covers the archived
+versions, not the ones on `main`. See [tests/docs/templates/finding.md](tests/docs/templates/finding.md)
 and [targets/wayfarer/ui/README.md](targets/wayfarer/ui/README.md#assertion-discipline).
 
 ---
